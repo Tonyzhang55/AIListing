@@ -1,0 +1,2616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Listing 优化引擎 · 美的集团 · 原型</title>
+<style>
+:root{
+  /* 主色系：Amazon Quick 紫色（原变量名沿用，色值切换到紫色系，全平台自动生效）*/
+  --amz-orange:#7C3AED;
+  --amz-orange-dark:#6D28D9;
+  --amz-orange-wash:#F5F3FF;
+  --amz-navy:#232F3E;
+  --amz-navy-2:#37475A;
+  --amz-blue:#146EB4;
+  --amz-blue-wash:#eaf3fb;
+  /* Amazon Q 强调色（Dashboard 特有元素用） */
+  --q-purple:#7C3AED;
+  --q-purple-dark:#5B21B6;
+  --q-purple-wash:#F3EEFF;
+  --q-cyan:#06B6D4;
+  --q-gradient:linear-gradient(135deg,#7C3AED 0%,#4F46E5 100%);
+  --ink:#0F1111;
+  --ink-2:#565959;
+  --ink-3:#8b9295;
+  --line:#e3e6e8;
+  --bg:#f5f6f7;
+  --card:#ffffff;
+  --a-bg:#e8f5e8;--a-fg:#067d62;
+  --b-bg:#fff5e6;--b-fg:#b25900;
+  --c-bg:#f2f2f2;--c-fg:#777;
+  --risk:#c7511f;
+  --radius:10px;
+  --shadow:0 1px 3px rgba(15,17,17,.06),0 4px 12px rgba(15,17,17,.04);
+  font-size:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:"Amazon Ember","PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,sans-serif;
+  color:var(--ink);background:var(--bg);overflow:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;font-size:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid var(--amz-orange);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ===== 顶栏 · Amazon Quick 白底风格 ===== */
+.topbar{
+  height:54px;display:flex;align-items:center;gap:12px;padding:0 18px;
+  background:#fff;color:var(--ink);border-bottom:1px solid var(--line);
+  position:relative;z-index:30;
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;color:var(--ink)}
+.brand-mark{
+  width:26px;height:26px;flex:none;
+  background:var(--q-gradient);
+  clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+  box-shadow:0 2px 6px rgba(124,58,237,.25);
+}
+.brand-sub{font-weight:400;font-size:12px;color:var(--ink-3);margin-left:2px}
+.crumb{color:var(--ink-3);font-size:13px}
+.crumb b{color:var(--ink);font-weight:500}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.bell{position:relative;width:34px;height:34px;border-radius:8px;display:grid;place-items:center;font-size:17px;color:var(--ink-2)}
+.bell:hover{background:var(--bg);color:var(--ink)}
+.bell .badge{
+  position:absolute;top:3px;right:3px;min-width:15px;height:15px;border-radius:8px;
+  background:var(--risk);color:#fff;font-size:10px;display:grid;place-items:center;padding:0 4px;font-weight:700;
+}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--q-gradient);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+.demo-tag{font-size:11px;color:var(--q-purple-dark);border:1px solid #d6c9f5;border-radius:20px;padding:3px 11px;background:var(--q-purple-wash);font-weight:500}
+
+/* ===== 骨架 ===== */
+.app{display:flex;height:calc(100% - 52px)}
+.sidebar{
+  width:240px;flex:none;background:#fff;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;padding:14px 10px;gap:2px;overflow-y:auto;
+}
+.side-btn{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+  font-size:13.5px;color:var(--ink-2);text-align:left;width:100%;
+}
+.side-btn:hover{background:var(--bg)}
+.side-btn.active{background:var(--amz-orange-wash);color:var(--amz-navy);font-weight:600}
+.side-btn .ic{width:18px;text-align:center;flex:none}
+.side-new{
+  margin-bottom:10px;background:var(--q-gradient);color:#fff;justify-content:center;font-weight:600;box-shadow:0 2px 8px rgba(124,58,237,.2);
+}
+.side-new:hover{background:var(--q-purple-dark);box-shadow:0 3px 10px rgba(124,58,237,.35)}
+.side-sec{font-size:11px;color:var(--ink-3);padding:14px 12px 5px;letter-spacing:.06em}
+.side-item{
+  display:block;width:100%;text-align:left;padding:7px 12px;border-radius:8px;font-size:12.5px;
+  color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.side-item:hover{background:var(--bg)}
+.side-item .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--amz-orange);margin-right:7px;vertical-align:1px}
+
+.main{flex:1;min-width:0;display:flex;position:relative}
+.view{display:none;flex:1;min-width:0}
+.view.on{display:flex}
+
+/* ===== 首页对话 ===== */
+.chat-col{flex:1;min-width:0;display:flex;flex-direction:column;transition:margin .25s}
+.chat-scroll{flex:1;overflow-y:auto;padding:28px 0 12px}
+.chat-inner{max-width:780px;margin:0 auto;padding:0 28px;display:flex;flex-direction:column;gap:18px}
+.hero{text-align:center;padding:32px 0 6px}
+.hero h1{font-size:26px;font-weight:700;letter-spacing:.01em;color:var(--amz-navy)}
+.hero h1 em{font-style:normal;color:var(--amz-orange-dark)}
+.hero p{color:var(--ink-2);margin-top:8px;font-size:13.5px}
+.hero-stats{display:flex;justify-content:center;gap:26px;margin-top:16px;font-size:12px;color:var(--ink-2)}
+.hero-stats b{display:block;font-size:20px;color:var(--amz-orange-dark);font-weight:700;font-variant-numeric:tabular-nums}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+.task-card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 14px;text-align:left;box-shadow:var(--shadow);transition:transform .15s,border-color .15s;
+}
+.task-card:hover{transform:translateY(-2px);border-color:var(--amz-orange)}
+.task-card .tc-ic{font-size:22px}
+.task-card b{display:block;margin:9px 0 4px;font-size:13.5px;color:var(--amz-navy)}
+.task-card span{font-size:12px;color:var(--ink-3);line-height:1.5}
+.sugg-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
+.chip{
+  border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 14px;
+  font-size:12.5px;color:var(--ink-2);transition:border-color .15s,color .15s;
+}
+.chip:hover{border-color:var(--amz-orange);color:var(--amz-orange-dark)}
+
+/* 消息气泡 */
+.msg{display:flex;gap:12px;animation:rise .3s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.msg .who{
+  width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-size:12px;font-weight:700;margin-top:2px;
+}
+.msg.user{flex-direction:row-reverse}
+.msg.user .who{background:var(--q-gradient);color:#fff}
+.msg.ai .who{background:#f5f5f7;color:var(--q-purple-dark);border:1px solid var(--line)}
+.bubble{max-width:82%;line-height:1.75;font-size:13.5px}
+.msg.user .bubble{background:var(--q-purple-wash);color:var(--ink);border:1px solid #e5deff;border-radius:14px 4px 14px 14px;padding:10px 15px}
+.msg.user .bubble .src{background:#fff;color:var(--ink-3);border-color:var(--line)}
+.msg.ai .bubble{background:#fff;border:1px solid var(--line);border-radius:4px 14px 14px 14px;padding:12px 16px;box-shadow:var(--shadow)}
+.bubble p+p{margin-top:8px}
+.bubble .src{
+  display:inline-block;font-size:11px;color:var(--ink-3);border:1px solid var(--line);
+  border-radius:4px;padding:1px 6px;margin:2px 3px 0 0;background:var(--bg);vertical-align:1px;
+}
+.bubble ul{padding-left:18px;margin:6px 0}
+.typing{display:inline-flex;gap:4px;padding:4px 2px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--ink-3);animation:blink 1s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.qr-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.qr{
+  border:1px solid rgba(255,153,0,.5);color:var(--amz-orange-dark);border-radius:8px;
+  padding:7px 13px;font-size:12.5px;background:#fff;
+}
+.qr:hover{background:var(--amz-orange-wash)}
+.qr.ghost{border-color:var(--line);color:var(--ink-2)}
+.qr.primary{background:var(--amz-orange);color:var(--amz-navy);border-color:var(--amz-orange);font-weight:600}
+.qr.primary:hover{background:var(--amz-orange-dark)}
+.file-chip{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;
+  padding:6px 11px;font-size:12.5px;background:var(--bg);margin-top:6px;
+}
+
+/* 表单卡 · ASIN 输入 */
+.form-card{border:1px solid var(--line);border-radius:10px;margin-top:10px;overflow:hidden;background:#fff}
+.form-card .fc-h{background:var(--q-purple-wash);color:var(--q-purple-dark);padding:10px 14px;font-weight:600;font-size:12.5px;border-bottom:1px solid #e5deff}
+.form-card .fc-b{padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f-field{display:flex;flex-direction:column;gap:4px}
+.f-field.full{grid-column:1/-1}
+.f-field label{font-size:11.5px;color:var(--ink-3)}
+.f-field input,.f-field textarea,.f-field select{
+  border:1px solid var(--line);border-radius:7px;padding:7px 10px;font:inherit;font-size:12.5px;background:#fff;resize:none;
+}
+.f-field input:focus,.f-field textarea:focus,.f-field select:focus{outline:none;border-color:var(--amz-orange)}
+.fc-foot{padding:10px 14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;background:#fafafa}
+.btn{
+  border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;
+  background:var(--q-purple);color:#fff;transition:background .15s;
+}
+.btn:hover{background:var(--q-purple-dark)}
+.btn.sub{background:#fff;color:var(--ink-2);border:1px solid var(--line);font-weight:400}
+.btn.sub:hover{border-color:var(--ink-3);background:var(--bg)}
+.btn.dark{background:var(--amz-navy);color:#fff}
+.btn.dark:hover{background:var(--amz-navy-2)}
+.btn[disabled]{opacity:.45;cursor:default}
+
+/* 进度卡 */
+.prog-card{border:1px solid var(--line);border-radius:10px;margin-top:10px;padding:13px 16px;background:#fff}
+.prog-line{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:4px 0;color:var(--ink-3)}
+.prog-line.doing{color:var(--ink)}
+.prog-line.ok{color:var(--a-fg)}
+.prog-line .st{width:16px;text-align:center;flex:none}
+.spinner{
+  width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--amz-orange);
+  border-radius:50%;display:inline-block;animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 结果卡 */
+.result-card{
+  border:1px solid var(--line);border-radius:10px;margin-top:10px;overflow:hidden;background:#fff;
+}
+.result-card .rc-h{padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+.rc-h .rc-ic{width:34px;height:34px;border-radius:9px;background:var(--amz-orange-wash);display:grid;place-items:center;font-size:16px}
+.rc-h b{font-size:13.5px;display:block;color:var(--amz-navy)}
+.rc-h span{font-size:11.5px;color:var(--ink-3)}
+.rc-badge{margin-left:auto;font-size:11.5px;border-radius:6px;padding:3px 10px;font-weight:600}
+.rc-badge.pass{background:var(--a-bg);color:var(--a-fg)}
+.rc-badge.warn{background:var(--b-bg);color:var(--b-fg)}
+.rc-grades{display:flex;gap:8px;padding:10px 16px;font-size:12px}
+.g-pill{border-radius:6px;padding:3px 10px;font-weight:600}
+.g-a{background:var(--a-bg);color:var(--a-fg)}
+.g-b{background:var(--b-bg);color:var(--b-fg)}
+.g-c{background:var(--c-bg);color:var(--c-fg)}
+.rc-foot{padding:10px 16px;border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;background:#fafafa}
+
+/* Before/After 对比卡 */
+.ba-card{border:1px solid var(--line);border-radius:10px;margin-top:10px;overflow:hidden;background:#fff}
+.ba-h{padding:9px 14px;background:var(--bg);font-weight:600;font-size:12.5px;border-bottom:1px solid var(--line);color:var(--amz-navy)}
+.ba-b{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.ba-side{padding:12px 14px;font-size:12.5px;line-height:1.7}
+.ba-side.before{border-right:1px solid var(--line);background:#fef7f5}
+.ba-side.after{background:#f5fbf6}
+.ba-side .ba-tag{font-weight:700;font-size:11.5px;margin-bottom:8px;letter-spacing:.05em}
+.ba-side.before .ba-tag{color:var(--risk)}
+.ba-side.after .ba-tag{color:var(--a-fg)}
+.ba-side small{color:var(--ink-3);font-size:11px;display:block;margin-top:4px}
+.ba-score{display:flex;justify-content:space-between;padding:8px 14px;border-top:1px solid var(--line);font-size:12px;background:#fafafa}
+.ba-score .num{font-size:16px;font-weight:700}
+.ba-score .before-n{color:var(--risk)}
+.ba-score .after-n{color:var(--a-fg)}
+
+/* 评分条 */
+.score-list{padding:10px 14px;font-size:12px}
+.score-item{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.score-item label{width:130px;color:var(--ink-2);flex:none;font-size:11.5px}
+.score-item .track{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden;max-width:200px}
+.score-item .fill{height:100%;background:var(--amz-orange);border-radius:3px;transition:width .5s ease}
+.score-item .val{width:44px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--amz-navy)}
+
+/* 权重 Plan Mode 卡 */
+.plan-card{
+  border:1px solid var(--line);border-left:4px solid var(--amz-orange);border-radius:10px;
+  margin-top:10px;background:linear-gradient(180deg,#fffdf6,#fff 90px);overflow:hidden;
+}
+.plan-h{display:flex;align-items:center;gap:9px;padding:12px 16px 4px}
+.plan-h .pm{
+  font-size:10.5px;letter-spacing:.1em;font-weight:700;color:#7a5600;background:var(--amz-orange-wash);
+  border:1px solid #ecd9a0;padding:2px 8px;border-radius:4px;
+}
+.plan-h b{font-size:14px;color:var(--amz-navy)}
+.w-panel{padding:2px 16px 10px}
+.w-row{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12.5px}
+.w-row label{width:170px;color:var(--ink-2);flex:none;font-size:12px}
+.w-row input[type=range]{flex:1;accent-color:var(--amz-orange)}
+.w-row .num{width:42px;text-align:right;font-weight:600;color:var(--amz-navy)}
+.plan-foot{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px dashed #ecd9a0}
+.plan-foot .note{font-size:11.5px;color:var(--ink-3);margin-left:auto}
+
+/* 输入区 */
+.composer{padding:10px 28px 18px;max-width:780px;margin:0 auto;width:100%}
+.scope-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.scope-chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--amz-navy);
+  background:var(--amz-blue-wash);border:1px solid #b8d5ea;border-radius:20px;padding:4px 12px;position:relative;
+}
+.scope-menu{
+  position:absolute;bottom:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);
+  border-radius:10px;box-shadow:var(--shadow);min-width:230px;padding:6px;display:none;z-index:20;
+}
+.scope-menu.down{bottom:auto;top:calc(100% + 6px)}
+.scope-menu.open{display:block}
+/* Amazon Q 紫色变体 */
+.scope-chip.quick{background:var(--q-purple-wash);border-color:#d6c9f5;color:var(--q-purple-dark)}
+.scope-chip.quick b{color:var(--q-purple-dark)}
+.scope-menu.quick button.cur{color:var(--q-purple-dark)}
+.scope-menu button{display:block;width:100%;text-align:left;padding:8px 11px;border-radius:7px;font-size:12.5px}
+.scope-menu button:hover{background:var(--bg)}
+.scope-menu button.cur{color:var(--amz-orange-dark);font-weight:600}
+.input-box{
+  display:flex;align-items:flex-end;gap:8px;background:#fff;border:1.5px solid var(--line);
+  border-radius:14px;padding:10px 12px;box-shadow:var(--shadow);transition:border-color .15s;
+}
+.input-box:focus-within{border-color:var(--amz-orange)}
+.input-box textarea{
+  flex:1;border:none;resize:none;font:inherit;font-size:13.5px;line-height:1.6;max-height:120px;outline:none;background:none;
+}
+.icon-btn{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-size:16px;color:var(--ink-3);flex:none}
+.icon-btn:hover{background:var(--bg);color:var(--ink)}
+.send-btn{
+  width:34px;height:34px;border-radius:9px;background:var(--q-purple);color:#fff;display:grid;place-items:center;font-size:15px;flex:none;font-weight:700;
+}
+.send-btn:hover{background:var(--q-purple-dark)}
+.composer .hint{font-size:11px;color:var(--ink-3);text-align:center;margin-top:7px}
+
+/* 步骤条 */
+.rec-steps{
+  width:172px;flex:none;border-right:1px solid var(--line);background:#fff;
+  padding:24px 16px;display:none;overflow-y:auto;
+}
+.rec-steps.on{display:block}
+.rec-steps .rs-title{font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:14px;text-transform:uppercase}
+.rec-steps ol{list-style:none}
+.rec-steps ol>li{
+  position:relative;display:flex;align-items:flex-start;gap:9px;
+  padding-bottom:22px;font-size:12.5px;color:var(--ink-3);
+}
+.rec-steps ol>li:last-child{padding-bottom:0}
+.rec-steps ol>li::before{
+  content:"";position:absolute;left:10px;top:22px;bottom:2px;width:2px;background:var(--line);
+}
+.rec-steps ol>li:last-child::before{display:none}
+.rec-steps ol>li.done::before{background:var(--a-fg)}
+.rec-steps .rs-dot{
+  width:21px;height:21px;flex:none;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;font-weight:700;background:var(--bg);border:1.5px solid var(--line);color:var(--ink-3);
+  position:relative;z-index:1;
+}
+.rec-steps ol>li.active{color:var(--ink);font-weight:600}
+.rec-steps ol>li.active .rs-dot{background:var(--amz-orange);border-color:var(--amz-orange);color:var(--amz-navy)}
+.rec-steps ol>li.done{color:var(--ink-2)}
+.rec-steps ol>li.done .rs-dot{background:var(--a-bg);border-color:var(--a-fg);color:var(--a-fg)}
+.rec-steps .rs-label{margin-top:2px;line-height:1.4;min-width:0}
+.rs-subs{list-style:none;margin-top:6px;display:none}
+.rec-steps ol>li.active .rs-subs{display:block}
+.rs-subs li{
+  display:flex;align-items:flex-start;gap:6px;padding:3px 0;
+  font-size:11px;color:var(--ink-3);font-weight:400;line-height:1.5;
+}
+.rs-subs li i{width:6px;height:6px;border-radius:50%;background:var(--line);margin-top:5px;flex:none}
+.rs-subs li.active{color:var(--amz-orange-dark);font-weight:600}
+.rs-subs li.active i{background:var(--amz-orange)}
+.rs-subs li.done{color:var(--a-fg)}
+.rs-subs li.done i{background:var(--a-fg)}
+@media (max-width:860px){.rec-steps{display:none!important}}
+
+/* 右侧预览面板 */
+.preview{
+  width:0;flex:none;background:#fff;border-left:1px solid var(--line);overflow:hidden;
+  transition:width .25s;display:flex;flex-direction:column;
+}
+.preview.open{width:520px}
+.preview-h{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex:none;min-width:519px;background:#fafafa}
+.preview-h b{font-size:13.5px;color:var(--amz-navy)}
+.preview-h span{font-size:11.5px;color:var(--ink-3)}
+.preview-b{flex:1;overflow:auto;padding:14px 18px;min-width:519px}
+.x-btn{margin-left:auto;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--ink-3)}
+.x-btn:hover{background:var(--bg);color:var(--ink)}
+
+/* 表格 */
+.tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+table.sites{border-collapse:separate;border-spacing:0;font-size:12.3px;min-width:100%}
+table.sites th,table.sites td{
+  padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left;
+}
+table.sites th{
+  background:#f5f5f7;color:var(--ink-2);font-weight:600;font-size:11.5px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--line);
+}
+table.sites th.stick-l,table.sites td.stick-l{position:sticky;left:0;z-index:3;background:#fff}
+table.sites th.stick-l{z-index:4;background:#f5f5f7}
+table.sites tr:last-child td{border-bottom:none}
+table.sites tbody tr{cursor:pointer}
+table.sites tbody tr:hover td{background:var(--amz-orange-wash)!important}
+tr.gr-A td{background:#f6fbf6}
+tr.gr-A td.stick-l{background:#f6fbf6}
+tr.gr-B td{background:#fffcf3}
+tr.gr-B td.stick-l{background:#fffcf3}
+tr.gr-C td{background:#fff}
+td .site-name{font-weight:600;color:var(--amz-navy)}
+td .pi{font-size:11px;color:var(--ink-3);display:block}
+.risk-flag{color:var(--risk);font-size:11.5px}
+.ok-flag{color:var(--a-fg);font-size:11.5px}
+.score-bar{display:inline-flex;align-items:center;gap:7px}
+.score-bar .track{width:52px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.score-bar .fill{height:100%;border-radius:3px;background:var(--amz-orange)}
+input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
+.status-pill-sm{font-size:10.5px;border-radius:20px;padding:1px 8px;font-weight:600;letter-spacing:.02em}
+.sp-live{background:var(--a-bg);color:var(--a-fg)}
+.sp-ab{background:var(--amz-blue-wash);color:var(--amz-blue)}
+.sp-draft{background:var(--c-bg);color:var(--c-fg)}
+.sp-fail{background:#fce8e0;color:var(--risk)}
+
+/* 项目工作区（表格+对话） */
+.ws{flex:1;min-width:0;display:flex}
+.ws-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:18px 20px;gap:12px;overflow:hidden}
+.ws-top{display:flex;align-items:center;gap:12px;flex:none;flex-wrap:wrap}
+.ws-top h2{font-size:17px;font-weight:700;color:var(--amz-navy)}
+.ver-chip{position:relative}
+.ver-chip>button{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;border:1px solid var(--line);
+  border-radius:7px;padding:5px 11px;background:#fff;color:var(--ink-2);
+}
+.ver-menu{
+  position:absolute;top:calc(100% + 5px);left:0;background:#fff;border:1px solid var(--line);border-radius:9px;
+  box-shadow:var(--shadow);min-width:250px;padding:6px;display:none;z-index:15;
+}
+.ver-menu.open{display:block}
+.ver-menu button{display:block;width:100%;text-align:left;padding:8px 11px;border-radius:7px;font-size:12.3px}
+.ver-menu button:hover{background:var(--bg)}
+.ver-menu button b{display:block;color:var(--amz-navy)}
+.ver-menu button span{font-size:11px;color:var(--ink-3)}
+.ws-top .spacer{flex:1}
+.sel-count{font-size:12.5px;color:var(--ink-2)}
+.sel-count b{color:var(--amz-orange-dark)}
+
+.logic-banner{
+  border:1px solid var(--line);border-left:4px solid var(--amz-orange);border-radius:10px;
+  background:#fff;flex:none;overflow:hidden;
+}
+.logic-banner .lb-h{display:flex;align-items:center;gap:9px;padding:10px 15px;font-size:12.8px;font-weight:600;width:100%;text-align:left;color:var(--amz-navy)}
+.logic-banner .lb-h .chev{margin-left:auto;color:var(--ink-3);transition:transform .2s}
+.logic-banner.open .lb-h .chev{transform:rotate(180deg)}
+.logic-banner .lb-b{display:none;padding:0 15px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.8}
+.logic-banner.open .lb-b{display:block}
+.ws-tbl{flex:1;min-height:0;display:flex;flex-direction:column}
+.ws-tbl .tbl-wrap{flex:1}
+
+/* KPI 卡片 */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:none}
+.kpi-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi-card .kpi-l{font-size:11.5px;color:var(--ink-3);margin-bottom:4px}
+.kpi-card .kpi-v{font-size:22px;font-weight:700;color:var(--amz-navy);font-variant-numeric:tabular-nums;line-height:1.2}
+.kpi-card .kpi-d{font-size:11.5px;margin-top:4px}
+.kpi-card .kpi-d.up{color:var(--a-fg)}
+.kpi-card .kpi-d.down{color:var(--risk)}
+
+/* Dashboard 运营总览 */
+.dash-page{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:14px}
+.dash-page-h{display:flex;align-items:center;gap:12px;flex:none;flex-wrap:wrap}
+.dash-page-h h2{font-size:19px;font-weight:700;color:var(--amz-navy);display:flex;align-items:center;gap:8px}
+.dash-page-h h2::before{content:"";width:22px;height:22px;border-radius:6px;background:var(--q-gradient);display:inline-block;box-shadow:0 2px 6px rgba(124,58,237,.3)}
+.dash-page-h .up-time{font-size:11.5px;color:var(--ink-3);margin-left:auto}
+.dash-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.dash-kpi .kpi-card{padding:13px 16px;position:relative}
+.dash-kpi .kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:10px 0 0 10px}
+.dash-kpi .kpi-card.ok::before{background:var(--a-fg)}
+.dash-kpi .kpi-card.warn::before{background:var(--amz-orange)}
+.dash-kpi .kpi-card.risk::before{background:var(--risk)}
+.dash-insights{background:linear-gradient(180deg,#faf7ff,#fff 100px);border:1px solid var(--line);border-left:4px solid var(--q-purple);border-radius:10px;padding:14px 16px}
+.dash-insights h3{font-size:13.5px;color:var(--amz-navy);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.dash-insights h3 .pm{font-size:10.5px;letter-spacing:.1em;font-weight:700;color:#fff;background:var(--q-gradient);padding:3px 10px;border-radius:4px}
+.dash-insights .sub{font-size:11.5px;color:var(--ink-3);margin-bottom:8px}
+.insight-item{padding:9px 0;border-top:1px dashed var(--line);font-size:12.5px;line-height:1.6;display:flex;align-items:flex-start;gap:11px}
+.insight-item:first-of-type{border-top:none;padding-top:2px}
+.insight-item .ins-ic{font-size:15px;flex:none;margin-top:1px;width:22px;text-align:center}
+.insight-item .ins-body{flex:1;min-width:0}
+.insight-item .ins-body b{color:var(--amz-navy)}
+.insight-item .ins-body .ins-tag{display:inline-block;font-size:10.5px;border-radius:5px;padding:1px 7px;font-weight:600;margin-right:6px;letter-spacing:.02em}
+.ins-tag.compl{background:#fce8e0;color:var(--risk)}
+.ins-tag.ad{background:var(--amz-blue-wash);color:var(--amz-blue)}
+.ins-tag.inv{background:var(--b-bg);color:var(--b-fg)}
+.ins-tag.perf{background:var(--a-bg);color:var(--a-fg)}
+.insight-item .ins-act{flex:none;font-size:11.5px;color:var(--q-purple-dark);border:1px solid var(--q-purple);border-radius:6px;padding:4px 10px;background:#fff;white-space:nowrap;font-weight:600;cursor:pointer}
+.insight-item .ins-act:hover{background:var(--q-purple);color:#fff}
+.dash-2col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.dash-panel{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.dash-panel-h{padding:11px 14px;font-size:12.8px;font-weight:600;border-bottom:1px solid var(--line);color:var(--amz-navy);background:#fafafa;display:flex;align-items:center;gap:8px}
+.dash-panel-h .cnt{margin-left:auto;font-size:11.5px;color:var(--ink-3);font-weight:400}
+.dash-panel-b{padding:0;overflow:auto}
+.dash-panel .list-tbl{border:none;border-radius:0}
+.dash-panel .list-tbl th{background:#fff;color:var(--ink-2);font-size:11px;border-bottom:1px solid var(--line)}
+.dash-panel .list-tbl td{font-size:12px;padding:9px 12px}
+.risk-pill{font-size:10.5px;border-radius:5px;padding:2px 8px;font-weight:600;letter-spacing:.02em;white-space:nowrap;display:inline-block}
+.risk-high{background:#fce8e0;color:var(--risk)}
+.risk-mid{background:var(--b-bg);color:var(--b-fg)}
+.risk-low{background:var(--amz-blue-wash);color:var(--amz-blue)}
+.risk-fix{background:var(--a-bg);color:var(--a-fg)}
+.inv-bar{display:inline-flex;align-items:center;gap:6px}
+.inv-bar .bar{width:52px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.inv-bar .fill{height:100%;border-radius:3px}
+.inv-bar .fill.ok{background:var(--a-fg)}
+.inv-bar .fill.warn{background:var(--amz-orange)}
+.inv-bar .fill.risk{background:var(--risk)}
+.ad-word{font-weight:600;color:var(--amz-navy);font-family:"Amazon Ember Mono",Menlo,monospace;font-size:11.5px}
+.dash-kpi.k5{grid-template-columns:repeat(5,1fr)}
+/* Citation 面板专用 */
+.cite-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 16px}
+.cite-cell{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:#fff}
+.cite-cell .cite-l{font-size:11.5px;color:var(--ink-3);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.cite-cell .cite-v{font-size:22px;font-weight:700;color:var(--amz-navy);font-variant-numeric:tabular-nums;line-height:1.1}
+.cite-cell .cite-d{font-size:11.5px;margin-top:5px}
+.cite-cell .cite-d.up{color:var(--a-fg)}
+.mini-trend{display:flex;align-items:flex-end;gap:3px;height:32px;margin-top:8px}
+.mini-trend span{flex:1;background:linear-gradient(180deg,var(--q-purple),#c4b5fd);border-radius:2px 2px 0 0;min-height:2px;transition:height .4s}
+.mini-trend.trend-up span:last-child{background:var(--q-purple-dark)}
+.sov-bars{margin-top:6px}
+.sov-bars .sov-row{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:3px 0}
+.sov-bars .sov-row .lbl{width:70px;flex:none;color:var(--ink-2)}
+.sov-bars .sov-row .bar{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.sov-bars .sov-row .bar span{display:block;height:100%;border-radius:4px;background:var(--ink-3)}
+.sov-bars .sov-row.us .bar span{background:var(--q-gradient)}
+.sov-bars .sov-row.us .lbl{color:var(--q-purple-dark);font-weight:700}
+.dash-panel.quick{border-left:4px solid var(--q-purple)}
+.dash-panel.quick .dash-panel-h{background:linear-gradient(90deg,var(--q-purple-wash),#fff);color:var(--q-purple-dark)}
+.dash-panel.quick .cite-cell .cite-v{color:var(--q-purple-dark)}
+.sov-bars .sov-row .val{width:34px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--amz-navy)}
+.ext-list{margin-top:6px;font-size:11.5px;color:var(--ink-2);line-height:1.75}
+.ext-list b{color:var(--amz-navy)}
+@media (max-width:1200px){.dash-kpi{grid-template-columns:repeat(2,1fr)}.dash-kpi.k5{grid-template-columns:repeat(3,1fr)}.dash-2col{grid-template-columns:1fr}.cite-grid{grid-template-columns:1fr}}
+
+/* ===== ASIN 对比表 · 对话内卡片 ===== */
+.compare-tbl{width:100%;border-collapse:collapse;font-size:12.3px;margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.compare-tbl th,.compare-tbl td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.compare-tbl th{background:#f5f5f7;color:var(--ink-2);font-size:11.5px;font-weight:600;line-height:1.4}
+.compare-tbl tr:last-child td{border-bottom:none}
+.compare-tbl td:first-child{color:var(--ink-3);font-size:11.5px;font-weight:600;background:#fafafa;width:110px;vertical-align:middle}
+.compare-tbl td.win{color:var(--a-fg);font-weight:600}
+.compare-tbl td.lose{color:var(--risk)}
+.compare-tbl .brand-tag{font-size:10px;border-radius:4px;padding:1px 6px;font-weight:600;letter-spacing:.02em;background:var(--bg);color:var(--ink-3);margin-right:5px;display:inline-block}
+.compare-tbl .brand-tag.own{background:var(--q-purple-wash);color:var(--q-purple-dark)}
+.compare-tbl .brand-tag.comp{background:#fce8e0;color:var(--risk)}
+
+/* ===== Amazon 买家界面模拟 · 右侧预览 ===== */
+.preview.wide.open{width:820px}
+.preview.wide .preview-h,.preview.wide .preview-b{min-width:819px}
+.amz-view{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.amz-product{background:#fff;border:1px solid #d5d9d9;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;font-size:12px;position:relative}
+.amz-product.own{border-color:var(--q-purple)}
+.amz-product-label{font-size:10px;font-weight:700;padding:3px 10px;letter-spacing:.06em;text-align:center}
+.amz-product.own .amz-product-label{background:var(--q-purple-wash);color:var(--q-purple-dark)}
+.amz-product.comp .amz-product-label{background:#fce8e0;color:var(--risk)}
+.amz-img{height:130px;background:linear-gradient(180deg,#fafafa,#f0f0f0);display:grid;place-items:center;font-size:52px;color:var(--ink-3);border-bottom:1px solid #eaeaea;position:relative}
+.amz-badges{position:absolute;left:6px;top:6px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.amz-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:.02em;line-height:1.2}
+.amz-badge.prime{background:#00A8E1;color:#fff}
+.amz-badge.deal{background:#CC0C39;color:#fff}
+.amz-body{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
+.amz-title{color:#007185;font-size:12.5px;line-height:1.35;font-weight:400;cursor:pointer;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.amz-title:hover{color:#C7511F;text-decoration:underline}
+.amz-stars{display:flex;align-items:center;gap:5px;font-size:12px}
+.amz-stars .stars{color:#FFA41C;letter-spacing:1.5px;font-size:13px}
+.amz-stars .score{color:#007185;cursor:pointer}
+.amz-stars .rev{color:#565959;font-size:11.5px;cursor:pointer}
+.amz-price-line{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:2px}
+.amz-price{font-size:20px;font-weight:400;color:#0F1111;font-variant-numeric:tabular-nums;line-height:1}
+.amz-price .cent{font-size:12px;vertical-align:top;position:relative;top:-2px}
+.amz-list{color:#565959;text-decoration:line-through;font-size:11.5px}
+.amz-save{color:#B12704;font-size:11.5px;font-weight:600}
+.amz-coupon{background:#EAFEEC;color:#007600;font-size:10.5px;padding:2px 6px;border-radius:3px;border:1px solid #a4d3a9;display:inline-block;margin-top:1px;font-weight:600}
+.amz-delivery{font-size:11.5px;color:var(--ink-2);line-height:1.45;margin-top:2px}
+.amz-delivery b{color:var(--ink)}
+.amz-buy{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.amz-buy-btn{padding:6px 8px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid transparent;text-align:center}
+.amz-buy-btn.cart{background:#FFD814;color:#0F1111;border-color:#FCD200}
+.amz-buy-btn.cart:hover{background:#F7CA00}
+.amz-buy-btn.now{background:#FFA41C;color:#0F1111;border-color:#FF8F00}
+.amz-buy-btn.now:hover{background:#FA8900}
+.amz-abt{border-top:1px dashed #eaeaea;padding-top:7px;margin-top:4px;font-size:11px;color:var(--ink-2)}
+.amz-abt b{display:block;color:#0F1111;font-size:11.5px;margin-bottom:4px}
+.amz-abt ul{padding-left:15px;margin:0;list-style:disc}
+.amz-abt li{padding:1px 0;line-height:1.5}
+.amz-meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-3);border-top:1px dashed #eaeaea;padding-top:6px;margin-top:5px}
+.amz-meta .meta-ai{color:var(--q-purple-dark);font-weight:600}
+
+@media (max-width:900px){.amz-view{grid-template-columns:1fr}}
+
+/* 常驻对话区（工作区） */
+.ws-chat{
+  width:390px;flex:none;border-left:1px solid var(--line);background:#fff;display:flex;flex-direction:column;
+}
+.ws-chat-h{padding:12px 16px;border-bottom:1px solid var(--line);flex:none;background:#fafafa}
+.ws-chat-h b{font-size:13px;color:var(--amz-navy)}
+.ws-chat-h span{display:block;font-size:11px;color:var(--ink-3);margin-top:2px}
+.ws-chat-scroll{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px}
+.ws-chat .bubble{max-width:100%;font-size:12.8px}
+.ws-chat .composer{padding:10px 12px 12px;max-width:none}
+.ws-hint-cards{display:flex;flex-direction:column;gap:7px;padding:0 2px}
+.hint-card{
+  display:flex;align-items:center;gap:9px;border:1px dashed var(--line);border-radius:9px;
+  padding:8px 12px;font-size:12.3px;color:var(--ink-2);text-align:left;background:var(--bg);
+}
+.hint-card:hover{border-color:var(--amz-orange);color:var(--amz-orange-dark);background:var(--amz-orange-wash)}
+
+/* 对比分析卡（对话内） */
+.diff-card{border:1px solid var(--line);border-radius:10px;margin-top:8px;overflow:hidden;font-size:12.3px;background:#fff}
+.diff-card .dc-h{background:var(--bg);padding:8px 12px;font-weight:600;border-bottom:1px solid var(--line);color:var(--amz-navy)}
+.diff-card .dc-b{padding:10px 12px;line-height:1.8}
+.diff-add{color:var(--a-fg)}
+.diff-del{color:var(--risk)}
+.diff-card .dc-risk{border-top:1px dashed var(--line);padding:9px 12px;background:var(--amz-orange-wash)}
+.diff-card .dc-risk b{color:var(--b-fg)}
+
+/* 列表页 / 知识库 / 研究 */
+.page{flex:1;overflow-y:auto;padding:26px 34px}
+.page-inner{max-width:1000px;margin:0 auto}
+.page h2{font-size:19px;font-weight:700;margin-bottom:4px;color:var(--amz-navy)}
+.page .sub{color:var(--ink-2);font-size:13px;margin-bottom:20px}
+.proj-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.proj-card{
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:17px;
+  box-shadow:var(--shadow);cursor:pointer;text-align:left;transition:transform .15s,border-color .15s;
+}
+.proj-card:hover{transform:translateY(-2px);border-color:var(--amz-orange)}
+.proj-card .pc-top{display:flex;align-items:center;gap:9px}
+.proj-card h3{font-size:14.5px;font-weight:600;color:var(--amz-navy)}
+.status-pill{font-size:11px;border-radius:20px;padding:2px 10px;margin-left:auto;font-weight:600}
+.st-active{background:var(--a-bg);color:var(--a-fg)}
+.st-draft{background:var(--c-bg);color:var(--c-fg)}
+.st-abtest{background:var(--amz-blue-wash);color:var(--amz-blue)}
+.proj-card .meta{font-size:12px;color:var(--ink-3);margin-top:8px;line-height:1.8}
+.proj-card .meta b{color:var(--ink-2);font-weight:500}
+.list-tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:12.8px}
+.list-tbl th,.list-tbl td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line)}
+.list-tbl th{background:#f5f5f7;color:var(--ink-2);font-size:11.5px;font-weight:600}
+.list-tbl tr:last-child td{border-bottom:none}
+.list-tbl tbody tr:hover{background:var(--amz-orange-wash)}
+.kb-cat{font-size:11px;border-radius:5px;padding:2px 8px;background:var(--amz-blue-wash);color:var(--amz-blue)}
+.switch{position:relative;width:34px;height:19px;background:#ccc;border-radius:10px;transition:background .15s;flex:none;cursor:pointer;border:none}
+.switch.on{background:var(--amz-orange)}
+.switch::after{
+  content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .15s;
+}
+.switch.on::after{left:17px}
+
+/* Feeds 抽屉 */
+.feeds{
+  position:fixed;top:52px;right:-360px;width:350px;height:calc(100% - 52px);background:#fff;
+  border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(15,17,17,.08);z-index:40;
+  transition:right .25s;display:flex;flex-direction:column;
+}
+.feeds.open{right:0}
+.feeds-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;font-weight:600;background:#fff;color:var(--ink)}
+.feeds-h .x-btn{color:var(--ink-3)}
+.feeds-h .x-btn:hover{background:var(--bg);color:var(--ink)}
+.feeds-b{flex:1;overflow-y:auto;padding:10px}
+.feed-item{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:9px;font-size:12.5px;background:#fff}
+.feed-item.unread{border-left:3px solid var(--amz-orange);background:var(--amz-orange-wash)}
+.feed-item b{display:block;margin-bottom:3px;font-size:12.8px;color:var(--amz-navy)}
+.feed-item .tm{color:var(--ink-3);font-size:11px;display:block;margin-top:6px}
+
+/* 弹窗 */
+.overlay{
+  position:fixed;inset:0;background:rgba(15,17,17,.4);z-index:50;display:none;
+  align-items:center;justify-content:center;padding:30px;
+}
+.overlay.open{display:flex}
+.modal{
+  background:#fff;border-radius:14px;max-width:720px;width:100%;max-height:86vh;overflow:hidden;
+  display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(15,17,17,.25);animation:rise .25s ease both;
+}
+.modal-h{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px;background:#fafafa}
+.modal-h h3{font-size:16px;font-weight:700;color:var(--amz-navy)}
+.modal-h .sub{font-size:12px;color:var(--ink-3);margin-top:3px}
+.modal-b{padding:18px 22px;overflow-y:auto;font-size:13px;line-height:1.8}
+.modal-b h4{font-size:12px;color:var(--ink-3);letter-spacing:.05em;margin:16px 0 7px;text-transform:uppercase}
+.modal-b h4:first-child{margin-top:0}
+.cite-row{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.cite-row:last-child{border-bottom:none}
+.cite-row .v{font-weight:600;white-space:nowrap;color:var(--amz-navy)}
+
+/* toast */
+.toast{
+  position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(70px);
+  background:var(--amz-navy);color:#fff;border-radius:10px;padding:11px 20px;font-size:13px;
+  z-index:60;transition:transform .25s;box-shadow:var(--shadow);max-width:80vw;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* A/B 结果表 */
+.ab-tbl{width:100%;border-collapse:collapse;font-size:12.3px;margin-top:6px;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.ab-tbl th,.ab-tbl td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.ab-tbl th{background:var(--bg);font-size:11.5px;color:var(--ink-2)}
+.ab-tbl tr:last-child td{border-bottom:none}
+.ab-tbl .win{color:var(--a-fg);font-weight:600}
+.ab-tbl .lose{color:var(--risk);font-weight:600}
+
+/* 人工跟进清单 · Step 3 AI 评分后 */
+.todo-card{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:10px;overflow:hidden}
+.todo-card .tc-h{padding:11px 14px;font-size:12.8px;font-weight:600;color:var(--amz-navy);background:linear-gradient(90deg,var(--q-purple-wash),#fff);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.todo-card .tc-h .tc-cnt{margin-left:auto;font-size:11.5px;color:var(--ink-3);font-weight:400}
+.todo-item{padding:12px 14px;border-top:1px dashed var(--line);display:flex;gap:11px}
+.todo-item:first-of-type{border-top:none}
+.todo-item .ti-ic{width:22px;flex:none;font-size:16px;color:var(--ink-3);text-align:center;margin-top:1px}
+.todo-item.assigned .ti-ic{color:var(--amz-orange-dark)}
+.todo-item.skipped .ti-ic{color:var(--a-fg)}
+.todo-item .ti-body{flex:1;min-width:0;font-size:12.3px;line-height:1.7}
+.todo-item .ti-title{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+.todo-item .ti-title b{color:var(--amz-navy);font-size:12.8px}
+.todo-item .ti-dim{font-size:10.5px;background:var(--bg);color:var(--ink-3);padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.02em}
+.todo-item .ti-issue{color:var(--ink-2)}
+.todo-item .ti-issue b{color:var(--ink)}
+.todo-item .ti-adv{color:var(--amz-navy);margin-top:2px}
+.todo-item .ti-meta{margin-top:5px;font-size:11px;color:var(--ink-3);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.todo-item .ti-meta .imp{color:var(--a-fg);font-weight:600}
+.todo-item .ti-actions{margin-top:7px;display:flex;gap:6px}
+.todo-item.assigned{background:#fdf7ea}
+.todo-item.skipped{opacity:.55}
+.todo-item.skipped .ti-actions{display:none}
+.todo-item.assigned .ti-actions{display:none}
+.todo-tag{font-size:10.5px;padding:2px 7px;border-radius:4px;font-weight:600;letter-spacing:.02em}
+.todo-tag.assigned{color:var(--amz-orange-dark);background:var(--amz-orange-wash)}
+.todo-tag.skipped{color:var(--ink-3);background:var(--bg)}
+.todo-summary{padding:10px 14px;background:var(--q-purple-wash);color:var(--q-purple-dark);font-size:12px;border-top:1px solid #e5deff;font-weight:600;line-height:1.6}
+
+/* 迭代日志 */
+.iter-log{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:10px}
+.iter-log .iter-row{display:grid;grid-template-columns:100px 1fr 1fr 80px;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12.3px;align-items:center}
+.iter-log .iter-row:last-child{border-bottom:none}
+.iter-log .iter-row.head{background:var(--bg);font-weight:600;font-size:11.5px;color:var(--ink-2)}
+.iter-log .st-tag{font-size:11px;border-radius:5px;padding:2px 8px;font-weight:600;display:inline-block;text-align:center}
+
+@media (max-width:1200px){
+  .cards{grid-template-columns:repeat(2,1fr)}
+  .preview.open{width:420px}
+  .preview-h,.preview-b{min-width:419px}
+  .ws-chat{width:330px}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:860px){
+  .sidebar{display:none}
+  .ws{flex-direction:column}
+  .ws-chat{width:100%;height:45%}
+}
+</style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">aws</span>
+    AI Listing 优化引擎
+    <span class="brand-sub">· 美的集团 · COMFEE 品类</span>
+  </div>
+  <span class="crumb" id="crumb">对话</span>
+  <div class="topbar-right">
+    <span class="demo-tag">原型演示 · Mock 数据</span>
+    <button class="bell" id="bellBtn" aria-label="消息通知">🔔<span class="badge" id="bellBadge" hidden>1</span></button>
+    <div class="avatar">T</div>
+  </div>
+</header>
+
+<div class="app">
+  <!-- 左侧栏 -->
+  <nav class="sidebar">
+    <button class="side-btn side-new" onclick="newChat()"><span class="ic">✏️</span>新建对话</button>
+    <button class="side-btn active" data-nav="home" onclick="go('home',this)"><span class="ic">💬</span>对话</button>
+    <button class="side-btn" data-nav="dash" onclick="go('dash',this)"><span class="ic">📊</span>运营总览</button>
+    <button class="side-btn" data-nav="projects" onclick="go('projects',this)"><span class="ic">📁</span>我的项目</button>
+    <button class="side-btn" data-nav="research" onclick="go('research',this)"><span class="ic">🔎</span>我的研究</button>
+    <button class="side-btn" data-nav="kb" onclick="go('kb',this)"><span class="ic">📚</span>知识库</button>
+    <div class="side-sec">历史对话</div>
+    <div id="recHistItem" hidden style="position:relative">
+      <button class="side-item" onclick="restoreRecChat()" style="padding-right:26px">
+        <span class="dot"></span><span id="recHistTitle">COMFEE 油烟机 · Listing 优化</span>
+        <span id="recHistTime" style="display:block;font-size:10.5px;color:var(--ink-3);margin-left:13px"></span>
+      </button>
+      <button onclick="clearRecChat(event)" aria-label="删除历史对话" title="删除"
+        style="position:absolute;right:6px;top:8px;width:20px;height:20px;border-radius:5px;color:var(--ink-3);font-size:13px">✕</button>
+    </div>
+    <button class="side-item" onclick="toast('演示原型：历史对话内容未包含在此 Demo 中')"><span class="dot"></span>Modular Title 批量迁移咨询</button>
+    <button class="side-item" onclick="toast('演示原型：历史对话内容未包含在此 Demo 中')"><span class="dot"></span>Broan 竞品 AI 标题分析</button>
+    <button class="side-item" onclick="toast('演示原型：历史对话内容未包含在此 Demo 中')"><span class="dot"></span>Alexa 场景词挖掘 · 微波炉品类</button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ====== 视图：首页对话 ====== -->
+    <section class="view on" id="view-home">
+      <aside class="rec-steps" id="recSteps" aria-label="Listing 优化流程">
+        <div class="rs-title">Listing 优化流程</div>
+        <ol>
+          <li id="rstep1"><span class="rs-dot">1</span><span class="rs-label">场景提取<ul class="rs-subs" id="rsubs1"></ul></span></li>
+          <li id="rstep2"><span class="rs-dot">2</span><span class="rs-label">内容生成<ul class="rs-subs" id="rsubs2"></ul></span></li>
+          <li id="rstep3"><span class="rs-dot">3</span><span class="rs-label">AI 评分<br><span style="font-size:10px;color:var(--a-fg);font-weight:600">入项目门槛</span><ul class="rs-subs" id="rsubs3"></ul></span></li>
+          <li id="rstep4"><span class="rs-dot">4</span><span class="rs-label">A/B 测试<br><span style="font-size:10px;color:var(--ink-3);font-weight:400">可选 · 优化中或入项目后</span><ul class="rs-subs" id="rsubs4"></ul></span></li>
+        </ol>
+        <div style="margin-top:20px;padding-top:14px;border-top:1px dashed var(--line)">
+          <div class="rs-title" style="margin-bottom:10px">项目层 · 持续运行</div>
+          <div style="font-size:12px;color:var(--ink-2);padding:5px 0;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:var(--a-fg);flex:none"></span>Citation 监控</div>
+          <div style="font-size:11px;color:var(--ink-3);padding:0 0 8px 16px">项目创建即启用 · 每 24h 刷新</div>
+          <div style="font-size:12px;color:var(--ink-2);padding:5px 0;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:var(--a-fg);flex:none"></span>自动迭代</div>
+          <div style="font-size:11px;color:var(--ink-3);padding:0 0 8px 16px">3 类触发器 · 关键改动人工审核</div>
+        </div>
+      </aside>
+      <div class="chat-col">
+        <div class="chat-scroll" id="homeScroll">
+          <div class="chat-inner" id="homeChat">
+            <div class="hero" id="hero">
+              <h1>早上好，Tony。<em>今天优化哪个 ASIN？</em></h1>
+              <p>7 月 27 日 Modular Titles 强制执行倒计时 · 直接说出诉求，AI 会拉起 6 步闭环并把产出呈现在右侧。</p>
+              <div class="hero-stats">
+                <div><b>250M+</b>Amazon AI 购物用户</div>
+                <div><b>3.5×</b>AI 会话购买率</div>
+                <div><b>38%</b>AI 会话占比</div>
+              </div>
+              <div class="cards">
+                <button class="task-card" onclick="startListing()">
+                  <span class="tc-ic">🚀</span><b>AI Listing 优化</b>
+                  <span>从场景提取到自动迭代 · 6 步闭环生成 AI-Ready Listing</span>
+                </button>
+                <button class="task-card" onclick="startMigration()">
+                  <span class="tc-ic">🔄</span><b>Modular Title 迁移</b>
+                  <span>批量拆分为 Item Name + Highlights · 07/27 前必做</span>
+                </button>
+                <button class="task-card" onclick="startAudit()">
+                  <span class="tc-ic">📊</span><b>AI 评分诊断</b>
+                  <span>输入 ASIN，8 维度打分并定位差距</span>
+                </button>
+                <button class="task-card" onclick="askGeneral()">
+                  <span class="tc-ic">💡</span><b>通用问答</b>
+                  <span>Alexa 场景、竞品动态、Rufus 引用等随问随答</span>
+                </button>
+              </div>
+              <div class="sugg-row">
+                <button class="chip" onclick="startCompareAsins()">⚖️ 对比 B08GK4VPMR、B08GK4S8LK、竞品 B0BXK6L2VP</button>
+                <button class="chip" onclick="askGeneral()">Alexa 上 "range hood for apartment" 场景谁在赢？</button>
+                <button class="chip" onclick="toast('演示原型：该问答路径未编入脚本，请点击其他入口')">Broan 上周更新了哪些 AI 相关字段？</button>
+                <button class="chip" onclick="toast('演示原型：该问答路径未编入脚本，请点击其他入口')">给我这个月 COMFEE 的 Alexa Share of Voice</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="scope-row">
+            <div class="scope-chip" id="scopeChip">
+              <button onclick="toggleScope(event)">◎ 范围：<b id="scopeName">全部品类</b> ▾</button>
+              <div class="scope-menu" id="scopeMenu">
+                <button class="cur" onclick="setScope('全部品类',this)">全部品类（COMFEE 全线 SKU）</button>
+                <button onclick="setScope('品类：油烟机',this)">品类：油烟机 (Range Hood)</button>
+                <button onclick="setScope('品类：微波炉',this)">品类：微波炉 (Microwave)</button>
+                <button onclick="setScope('品类：便携空调',this)">品类：便携空调</button>
+              </div>
+            </div>
+            <div class="scope-chip" style="background:var(--amz-orange-wash);border-color:#ecd9a0;color:var(--b-fg)">
+              ⏰ Modular Titles 强制生效 · <b>19 天</b>
+            </div>
+          </div>
+          <div class="input-box">
+            <button class="icon-btn" title="附加文档" onclick="toast('演示原型：请通过对话中的引导按钮上传文档')">📎</button>
+            <textarea id="homeInput" rows="1" placeholder="输入 ASIN 或直接说“帮我优化油烟机 Listing”…"></textarea>
+            <button class="send-btn" onclick="freeSend()" aria-label="发送">➤</button>
+          </div>
+          <p class="hint">Powered by Amazon Bedrock (Claude/Nova) + Alexa Shopping API · 运行在美的 AWS 账户内，数据不出境</p>
+        </div>
+      </div>
+
+      <!-- 右侧预览 -->
+      <aside class="preview" id="preview">
+        <div class="preview-h">
+          <div><b id="pvTitle">Listing 预览</b><br><span id="pvSub">COMFEE CVU30W4AST · 生成于刚刚</span></div>
+          <button class="x-btn" onclick="closePreview()" aria-label="关闭预览">✕</button>
+        </div>
+        <div class="preview-b" id="pvBody"></div>
+      </aside>
+    </section>
+
+    <!-- ====== 视图：运营总览 Dashboard ====== -->
+    <section class="view" id="view-dash">
+      <div class="dash-page" id="dashPage"></div>
+    </section>
+
+    <!-- ====== 视图：项目工作区 ====== -->
+    <section class="view" id="view-project">
+      <div class="ws">
+        <div class="ws-main">
+          <div class="ws-top">
+            <h2>COMFEE 油烟机品类 · Listing 组合</h2>
+            <div class="ver-chip">
+              <button onclick="toggleVer(event)" id="verBtn">📌 V3（当前 · A/B 后）▾</button>
+              <div class="ver-menu" id="verMenu">
+                <button onclick="switchVer(3,this)"><b>V3（当前）</b><span>07-06 · A/B 全量上线 · CVR +62%</span></button>
+                <button onclick="switchVer(2,this)"><b>V2 · AI 生成</b><span>07-01 · Bedrock 生成后待测</span></button>
+                <button onclick="switchVer(1,this)"><b>V1 · 原始 Listing</b><span>06-01 · 优化前基线</span></button>
+              </div>
+            </div>
+            <button class="btn sub" onclick="openEvidence()" style="font-size:12px">📋 项目信息与决策快照</button>
+            <button class="btn sub" onclick="goDashFromProject()" style="font-size:12px;border-color:var(--q-purple);color:var(--q-purple-dark)">📊 运营总览（本品类）</button>
+            <div class="spacer"></div>
+            <span class="sel-count">已选择 <b class="num" id="selCount">0</b> 个</span>
+            <button class="btn sub" onclick="toast('演示原型：可在对话中说“对这批 ASIN 生成月度归因报告”')">📊 归因分析</button>
+            <button class="btn" onclick="exportSel()">⬇ 批量导出</button>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--a-fg);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--ink-2);flex-wrap:wrap">
+            <b style="color:var(--amz-navy);font-size:12.5px">🟢 项目持续能力</b>
+            <span><b style="color:var(--a-fg)">📡 Citation 监控</b> · 每 24h · 上次 2h 前</span>
+            <span><b style="color:var(--a-fg)">🔄 自动迭代</b> · 3 触发器 · 本月 7 次</span>
+            <span><b style="color:var(--amz-orange-dark)">📋 人工任务</b> · 4 进行中 · 2 已完成</span>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn sub" style="padding:5px 12px;font-size:12px" onclick="openHumanTasks()">👥 人工任务</button>
+              <button class="btn sub" style="padding:5px 12px;font-size:12px" onclick="openIterLog()">� 迭代日志</button>
+            </div>
+          </div>
+
+          <div class="kpi-row">
+            <div class="kpi-card"><div class="kpi-l">Alexa 命中率（品类均值）</div><div class="kpi-v">41%</div><div class="kpi-d up">▲ +29pp vs V1</div></div>
+            <div class="kpi-card"><div class="kpi-l">AI-Ready Score（品类均值）</div><div class="kpi-v">83<span style="font-size:14px;color:var(--ink-3)">/100</span></div><div class="kpi-d up">▲ +44 vs V1</div></div>
+            <div class="kpi-card"><div class="kpi-l">A/B 转化率提升</div><div class="kpi-v">+62%</div><div class="kpi-d up">p=0.003 · 显著</div></div>
+            <div class="kpi-card"><div class="kpi-l">本月自动迭代</div><div class="kpi-v">7<span style="font-size:14px;color:var(--ink-3)"> 次</span></div><div class="kpi-d">人工介入 0 次</div></div>
+          </div>
+
+          <div class="logic-banner open" id="logicBanner">
+            <button class="lb-h" onclick="document.getElementById('logicBanner').classList.toggle('open')">
+              💡 本版评分逻辑（品类总体） <span class="chev">▾</span>
+            </button>
+            <div class="lb-b" id="logicText">
+              评估框架：<b>Modular Title 合规 ✓ · 8 维度加权评分 ✓ · A/B 显著性 p&lt;0.05 门槛 ✓</b>。加权：<b>A9 关键词+语义 20% · 场景化 15% · AI 可读性 15% · GEO 15% · 视觉 12% · A+ 10% · TQS/KBYB 合规 8% · 评论社交 5%</b>。<br>
+              A 级（绿色）AI-Ready ≥85 · Alexa 命中率 ≥40%；B 级（黄色）65-85 之间待优化；C 级 &lt;65 需回炉重生成。<b>V3 变化：</b>6 个 SKU A/B 显著胜出，1 个未通过重回 Step 2；Broan 07-04 更新标题触发差异化迭代（"No-Drill Option"）。定量数据点击各 ASIN 可查评分维度分解。
+            </div>
+          </div>
+          <div class="ws-tbl">
+            <div class="tbl-wrap" id="tblWrap"></div>
+          </div>
+        </div>
+
+        <!-- 常驻对话 -->
+        <aside class="ws-chat">
+          <div class="ws-chat-h">
+            <b>💬 与 AI 讨论这批 Listing</b>
+            <span>上下文：COMFEE 油烟机 · V3 组合（12 个 ASIN）</span>
+          </div>
+          <div class="ws-chat-scroll" id="wsChat">
+            <div class="ws-hint-cards" id="wsHints">
+              <button class="hint-card" onclick="openHumanTasks()">👥 看人工任务进度（4 进行中 · 2 已完成）</button>
+              <button class="hint-card" onclick="wsStartAB()">🧪 给 B08YXK3M2P 启动 A/B 测试（14 天）</button>
+              <button class="hint-card" onclick="openIterLog()">🔄 看本月自动迭代日志（7 次）</button>
+              <button class="hint-card" onclick="wsCompareCompetitor()">⚖️ 与 Broan 品类头部做差异化对比</button>
+              <button class="hint-card" onclick="wsSqv()">📄 上传新一批 Alexa Follow-up 日志</button>
+              <button class="hint-card" onclick="wsWhy()">❓ 为什么 CVU30L2W 被列为 C 级？</button>
+              <button class="hint-card" onclick="wsAddColumn()">➕ 表格加一列「Rufus Q&A 引用数」</button>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="input-box">
+              <button class="icon-btn" title="附加文档" onclick="toast('演示原型：请使用左侧提示卡片上传')">📎</button>
+              <textarea id="wsInput" rows="1" placeholder="加列、追问评分、生成图表、触发迭代…"></textarea>
+              <button class="send-btn" onclick="wsFreeSend()" aria-label="发送">➤</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ====== 视图：我的项目 ====== -->
+    <section class="view" id="view-projects">
+      <div class="page"><div class="page-inner">
+        <h2>我的项目</h2>
+        <p class="sub">按品类组织的优化项目 · 每个项目保留决策快照、A/B 结果、迭代日志。</p>
+        <div class="proj-grid">
+          <button class="proj-card" onclick="enterProject()">
+            <div class="pc-top"><h3>COMFEE 油烟机 Range Hood</h3><span class="status-pill st-active">进行中</span></div>
+            <div class="meta">
+              品类：<b>Range Hood · 30/36 英寸 · 3 SKU 系列</b><br>
+              名单：<b>V3</b> · 12 个 ASIN（A6/B4/C2）· 6 个已 A/B 全量上线<br>
+              最近更新：今天 09:23 · 自动迭代（Broan 竞品变化触发）
+            </div>
+          </button>
+          <button class="proj-card" onclick="toast('演示原型：仅“油烟机”项目包含完整数据')">
+            <div class="pc-top"><h3>COMFEE 便携空调 Portable AC</h3><span class="status-pill st-abtest">A/B 测试中</span></div>
+            <div class="meta">
+              品类：<b>Portable Air Conditioner · 8000/10000 BTU</b><br>
+              名单：<b>V2</b> · 18 个 ASIN · 首轮 A/B 已启动 8 天<br>
+              最近更新：07-05 · 首轮实验 Day 8 / 14
+            </div>
+          </button>
+          <button class="proj-card" onclick="toast('演示原型：仅“油烟机”项目包含完整数据')">
+            <div class="pc-top"><h3>COMFEE 微波炉 Microwave</h3><span class="status-pill st-active">进行中</span></div>
+            <div class="meta">
+              品类：<b>Microwave · Countertop 系列</b><br>
+              名单：<b>V4</b> · 24 个 ASIN · Alexa 命中率 品类第 2<br>
+              最近更新：07-04 · 新 Follow-up 触发局部迭代（3 个 SKU）
+            </div>
+          </button>
+          <button class="proj-card" onclick="toast('演示原型：仅“油烟机”项目包含完整数据')">
+            <div class="pc-top"><h3>Toshiba 空气炸锅 Air Fryer</h3><span class="status-pill st-draft">草稿</span></div>
+            <div class="meta">
+              品类：<b>Air Fryer</b><br>
+              名单：尚未生成 · 已完成场景提取（Alexa Summary + 32 条 Follow-up）<br>
+              最近更新：06-30
+            </div>
+          </button>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ====== 视图：我的研究 ====== -->
+    <section class="view" id="view-research">
+      <div class="page"><div class="page-inner">
+        <h2>我的研究</h2>
+        <p class="sub">优化流程中沉淀的场景研究与竞品分析 · 可引用到对话中作为证据。</p>
+        <table class="list-tbl">
+          <thead><tr><th>名称</th><th>状态</th><th>来源</th><th>更新时间</th></tr></thead>
+          <tbody>
+            <tr onclick="openResearch()">
+              <td>🔎 Range Hood 品类 Alexa 场景词图谱（TOP 30）</td>
+              <td><span class="ok-flag">✔ 研究完成</span></td><td>油烟机 Step 1 场景提取</td><td>07-01</td>
+            </tr>
+            <tr onclick="toast('演示原型：仅第一篇研究包含内容')">
+              <td>🔎 Broan / COSMO / eufy 竞品 AI 标题结构分析</td>
+              <td><span class="ok-flag">✔ 研究完成</span></td><td>Step 6 自动迭代触发</td><td>07-04</td>
+            </tr>
+            <tr onclick="toast('演示原型：仅第一篇研究包含内容')">
+              <td>🔎 Amazon Modular Titles 政策解读与迁移风险</td>
+              <td><span class="ok-flag">✔ 研究完成</span></td><td>手动发起</td><td>06-15</td>
+            </tr>
+            <tr onclick="toast('演示原型：仅第一篇研究包含内容')">
+              <td>🔎 Portable AC 品类 Rufus Q&A 高频问题聚类</td>
+              <td><span style="color:var(--b-fg);font-size:11.5px">● 执行中 68%</span></td><td>便携空调 Step 1</td><td>今天</td>
+            </tr>
+          </tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ====== 视图：知识库 ====== -->
+    <section class="view" id="view-kb">
+      <div class="page"><div class="page-inner">
+        <h2>知识库</h2>
+        <p class="sub">上传的产品资料、竞品 Listing、Alexa 日志、A/B 报告统一管理 · 逐个文件控制是否参与推荐与问答。</p>
+        <table class="list-tbl">
+          <thead><tr><th>文件</th><th>类别</th><th>关联项目</th><th>上传时间</th><th>参与推荐</th></tr></thead>
+          <tbody id="kbBody"></tbody>
+        </table>
+        <p style="margin-top:14px"><button class="btn sub" onclick="toast('演示原型：可直接在对话框中 📎 上传，系统会自动归档')">⬆ 上传文件</button></p>
+      </div></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Feeds -->
+<aside class="feeds" id="feeds">
+  <div class="feeds-h">📣 Feeds · 任务动态<button class="x-btn" style="margin-left:auto" onclick="toggleFeeds()" aria-label="关闭">✕</button></div>
+  <div class="feeds-b" id="feedsBody">
+    <div class="feed-item">
+      <b>🔄 自动迭代已执行</b>Broan CVU30 更新 AI 标题触发差异化：已为 3 个 COMFEE SKU 添加 "No-Drill Option" 卖点。
+      <span class="tm">今天 09:23</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ASIN 详情弹窗 -->
+<div class="overlay" id="siteOverlay" onclick="if(event.target===this)closeModal('siteOverlay')">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-h">
+      <div><h3 id="mSiteName">ASIN 详情</h3><div class="sub" id="mSiteSub"></div></div>
+      <button class="x-btn" onclick="closeModal('siteOverlay')" aria-label="关闭">✕</button>
+    </div>
+    <div class="modal-b" id="mSiteBody"></div>
+  </div>
+</div>
+
+<!-- 研究弹窗 -->
+<div class="overlay" id="resOverlay" onclick="if(event.target===this)closeModal('resOverlay')">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-h">
+      <div><h3>Range Hood 品类 Alexa 场景词图谱（TOP 30）</h3><div class="sub">深度研究 · Version 1 · 来源：Alexa Shopping API · 12,428 条对话样本</div></div>
+      <button class="x-btn" onclick="closeModal('resOverlay')" aria-label="关闭">✕</button>
+    </div>
+    <div class="modal-b">
+      <h4>执行摘要</h4>
+      <p>Range Hood 品类 Alexa 场景查询前 3 类：<b>公寓/小户型（32%）</b>、<b>安装难度（21%）</b>、<b>噪音水平（18%）</b>。竞品 Broan 在 "quiet" 场景占 SoV 41%，COMFEE 仅 12%；"apartment-friendly" 场景当前无强势品牌，是 COMFEE 可切入的空白。</p>
+      <h4>对 Listing 优化的建议</h4>
+      <ul>
+        <li>Item Highlights 优先纳入 "52dB Quiet" + "Apartment-Friendly" 场景标签；</li>
+        <li>Q&A 覆盖 TOP 5 Follow-up：apartment size, install time, ductless option, filter care, noise at night；</li>
+        <li>A+ Content 增加 "Small Kitchen" 生活场景图，触发 Rufus 视觉理解。</li>
+      </ul>
+      <p style="margin-top:12px"><span class="src">Alexa Shopping API · 2026-06-28</span><span class="src">Rufus Community Feedback</span><span class="src">Amazon Ads API</span></p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   Mock 数据
+===================================================================== */
+/* AI-Ready 状态：live=A/B 全量  ab=A/B 测试中  draft=草稿  fail=A/B 未通过 */
+const ASINS = [
+ {id:1, asin:"B08GK4VPMR", name:"COMFEE 30\" Slim Under-Cabinet Range Hood", model:"CVU30W4AST", cat:"Range Hood 30\"",
+  grade:"A", score:85, alexa:41, ab:{cvr:5.2,cvrDelta:62,ctr:5.7,ctrDelta:39,alexaHit:34,alexaDelta:183}, status:"live", risk:null,
+  dims:{a9:18,scenario:13,ai:13,geo:13,visual:7,aplus:8,tqs:6,social:4},
+  why:"Modular Title 已切分为 45+102 chars；Alexa 场景词覆盖 Apartment-Friendly + 52dB Quiet；A/B 14 天转化率 +62% 显著胜出；Rufus Community Feedback 引用 3 条产品 Q&A。首批全量上线代表 SKU。",
+  before:{name:"COMFEE' CVU30W4AST 30 Inch Under Cabinet Range Hood with 200 CFM, Ducted/Ductless Convertible Slim Kitchen Over Stove Vent...", chars:198, bullets:["200 CFM suction power for effective ventilation","Reusable aluminum mesh filters"], qa:0, score:39},
+  after:{itemName:"COMFEE 30-Inch Slim Under-Cabinet Range Hood", highlights:"200 CFM, Ducted/Ductless, 52dB Quiet, 20-Min Install, 3-Speed, Reusable Filters, LED, Stainless Steel", bullets:["Apartment-Friendly: 52dB whisper-quiet, ideal for open-plan living","20-Min DIY Install, no electrician needed (kit + video guide included)","Ducted/Ductless Convertible with 200 CFM 3-speed extraction","Reusable Aluminum Filters, dishwasher-safe, saves $30+/year on carbon","LED Lighting 2×1.5W, energy efficient for 30-inch cooktops"], qa:10}},
+ {id:2, asin:"B08GK4S8LK", name:"COMFEE 36\" Wall-Mount Range Hood", model:"CVW36W6AST", cat:"Range Hood 36\"",
+  grade:"A", score:88, alexa:44, ab:{cvr:6.8,cvrDelta:71,ctr:6.3,ctrDelta:44,alexaHit:38,alexaDelta:171}, status:"live", risk:null,
+  dims:{a9:19,scenario:14,ai:13,geo:14,visual:8,aplus:9,tqs:7,social:4},
+  why:"36 英寸旗舰款，Alexa 场景「open-plan kitchen」独占 SoV 28%；A/B 转化 +71% 领跑全品类；A+ Content 品牌故事完整度评分 9/10。",
+  before:{name:"COMFEE' 36 Inch Under Cabinet Range Hood 600 CFM Ductless Ducted Convertible Slim Kitchen Vent Fan...", chars:186, bullets:["600 CFM extraction","Stainless steel finish"], qa:0, score:44},
+  after:{itemName:"COMFEE 36-Inch Wall-Mount Range Hood", highlights:"600 CFM, Ducted/Ductless, 55dB, Open-Plan Kitchen, Touch Panel, Auto-Delay Off", bullets:[], qa:12}},
+ {id:3, asin:"B091DK2H4W", name:"COMFEE Countertop Microwave 0.7 Cu.Ft", model:"EM720CPL", cat:"Microwave",
+  grade:"A", score:86, alexa:39, ab:{cvr:4.9,cvrDelta:54,ctr:5.4,ctrDelta:36,alexaHit:31,alexaDelta:163}, status:"live", risk:null,
+  dims:{a9:18,scenario:13,ai:14,geo:13,visual:8,aplus:8,tqs:6,social:4},
+  why:'Alexa TOP 场景 "small microwave for dorm/apartment" 命中率 39%；Q&A 覆盖尺寸、功耗、清洁 3 大高频场景。',
+  before:{name:"COMFEE' Countertop Microwave Oven 0.7 Cu.Ft 700W Small Compact Microwave with 11 Power Levels...", chars:172, bullets:["11 power levels","One-touch cooking"], qa:0, score:41},
+  after:{itemName:"COMFEE 0.7 Cu.Ft Countertop Microwave, 700W", highlights:"Dorm/Apartment Ready, 11 Power Levels, One-Touch Presets, Child Lock, ECO Mode, Small Footprint", bullets:[], qa:10}},
+ {id:4, asin:"B091DK9M2L", name:"COMFEE 1.1 Cu.Ft Countertop Microwave", model:"EM110CAF", cat:"Microwave",
+  grade:"A", score:84, alexa:37, ab:{cvr:4.5,cvrDelta:48,ctr:5.1,ctrDelta:32,alexaHit:29,alexaDelta:141}, status:"live", risk:null,
+  dims:{a9:17,scenario:13,ai:13,geo:12,visual:7,aplus:8,tqs:7,social:4},
+  why:"家庭尺寸主力款，AI 语义可读性满分；A+ 视觉内容评分待补齐（新增 lifestyle 图 3 张）。",
+  before:{name:"COMFEE' Retro Small Microwave Oven With Compact Size 9 Preset Menus...", chars:145, bullets:[], qa:0, score:52},
+  after:{itemName:"COMFEE 1.1 Cu.Ft Retro Countertop Microwave", highlights:"Family Size, 9 Auto Menus, Sensor Cooking, Child Lock, Cream/Pastel Green, Fits 10\" Plate", bullets:[], qa:9}},
+];
+
+ASINS.push(
+ {id:5, asin:"B08MHKJ7GH", name:"COMFEE 30\" Ductless Convertible Range Hood", model:"CVU30D2AST", cat:"Range Hood 30\"",
+  grade:"A", score:83, alexa:36, ab:{cvr:4.2,cvrDelta:38,ctr:4.8,ctrDelta:28,alexaHit:27,alexaDelta:125}, status:"live", risk:null,
+  dims:{a9:17,scenario:13,ai:12,geo:13,visual:7,aplus:8,tqs:7,social:5},
+  why:'入门款，Ductless 场景（rental / no vent hood）Alexa 命中率提升显著。',
+  before:null, after:null},
+ {id:6, asin:"B08YWKF3XR", name:"COMFEE 24\" Compact Under-Cabinet Hood", model:"CVU24W4AST", cat:"Range Hood 24\"",
+  grade:"A", score:82, alexa:34, ab:{cvr:3.9,cvrDelta:35,ctr:4.6,ctrDelta:26,alexaHit:25,alexaDelta:108}, status:"live", risk:null,
+  dims:{a9:17,scenario:12,ai:13,geo:12,visual:7,aplus:8,tqs:7,social:4},
+  why:'小尺寸公寓场景细分款；Rufus 引用 "small kitchen range hood" 高频。',
+  before:null, after:null},
+ {id:7, asin:"B08GK4V38N", name:"COMFEE 30\" Chef-Style Range Hood", model:"CVU30C5AST", cat:"Range Hood 30\"",
+  grade:"B", score:78, alexa:24, ab:{cvr:4.1,cvrDelta:22,ctr:4.9,ctrDelta:18,alexaHit:22,alexaDelta:88}, status:"ab", risk:"A+ 视觉待增强",
+  dims:{a9:16,scenario:12,ai:12,geo:12,visual:6,aplus:6,tqs:7,social:4},
+  why:'A/B 测试 Day 9 / 14，CVR 提升 22% 尚未达到显著性阈值（p=0.08，需再等 5 天）。A+ 视觉与场景图短板明显。',
+  before:null, after:null},
+ {id:8, asin:"B08GK4TT2Y", name:"COMFEE 36\" Island-Mount Range Hood", model:"CVI36W6AST", cat:"Range Hood 36\"",
+  grade:"B", score:75, alexa:22, ab:{cvr:3.6,cvrDelta:18,ctr:4.2,ctrDelta:15,alexaHit:19,alexaDelta:72}, status:"ab", risk:"品类竞争强",
+  dims:{a9:15,scenario:12,ai:12,geo:11,visual:6,aplus:7,tqs:8,social:4},
+  why:'Island-Mount 品类 Broan / Zline 竞争密集，Alexa SoV 仅 8%。建议 Q&A 强化 "high ceiling installation" 差异化。',
+  before:null, after:null},
+ {id:9, asin:"B091DL5XPQ", name:"COMFEE 0.9 Cu.Ft Retro Microwave Green", model:"EM09RGN", cat:"Microwave",
+  grade:"B", score:72, alexa:19, ab:{cvr:3.4,cvrDelta:15,ctr:4.1,ctrDelta:12,alexaHit:17,alexaDelta:65}, status:"ab", risk:"评论社交较弱",
+  dims:{a9:14,scenario:11,ai:12,geo:11,visual:7,aplus:7,tqs:7,social:3},
+  why:'色彩款受众细分，评论量 128 条偏少，Rufus Community Feedback 可引用点少。建议 Q&A 增加 "color match kitchen" 场景。',
+  before:null, after:null},
+ {id:10, asin:"B091DL8W7C", name:"COMFEE Countertop Microwave 1.4 Cu.Ft", model:"EM144KM1", cat:"Microwave",
+  grade:"B", score:69, alexa:18, ab:{cvr:3.1,cvrDelta:8,ctr:3.8,ctrDelta:5,alexaHit:14,alexaDelta:42}, status:"draft", risk:"Highlights 需重写",
+  dims:{a9:14,scenario:10,ai:11,geo:10,visual:7,aplus:7,tqs:6,social:4},
+  why:"Modular Title 拆分不合理，Highlights 缺关键场景词。已进入 Step 2 重新生成排队。",
+  before:null, after:null},
+ {id:11, asin:"B08YXK3M2P", name:"COMFEE 30\" Range Hood Legacy Model", model:"CVU30L2W", cat:"Range Hood 30\"",
+  grade:"C", score:58, alexa:11, ab:null, status:"draft", risk:"评分不达阈值",
+  dims:{a9:12,scenario:8,ai:9,geo:8,visual:5,aplus:5,tqs:7,social:4},
+  why:"老型号，AI-Ready 评分 58 &lt;65。已建议下架或退回研发合并到主 SKU。",
+  before:null, after:null},
+ {id:12, asin:"B091DK9M8X", name:"COMFEE Compact Microwave Legacy", model:"EM07L1", cat:"Microwave",
+  grade:"C", score:54, alexa:9, ab:{cvr:2.9,cvrDelta:-3,ctr:3.5,ctrDelta:-1,alexaHit:11,alexaDelta:15}, status:"fail", risk:"A/B 未通过",
+  dims:{a9:11,scenario:8,ai:8,geo:8,visual:5,aplus:5,tqs:6,social:3},
+  why:"A/B 14 天结束，CVR 未达显著性（p=0.31）。已回退 V1，返回 Step 2 重新场景提取。",
+  before:null, after:null},
+);
+
+/* 8 维度评分定义 */
+const DIMS = [
+ {key:"a9",       name:"A9 关键词+语义", max:20, w:20},
+ {key:"scenario", name:"场景化/人设化表达", max:15, w:15},
+ {key:"ai",       name:"AI 语义可读性", max:15, w:15},
+ {key:"geo",      name:"GEO 生成式引擎", max:15, w:15},
+ {key:"visual",   name:"视觉内容质量", max:12, w:12},
+ {key:"aplus",    name:"A+ 品牌内容", max:10, w:10},
+ {key:"tqs",      name:"TQS+KBYB 合规", max:8, w:8},
+ {key:"social",   name:"评论与社交信号", max:5, w:5},
+];
+let curW = {}; DIMS.forEach(d=>curW[d.key]=d.w);
+
+/* 场景提取候选（Alexa Follow-up） */
+const SCENARIOS = [
+ {q:"Is this quiet enough for an apartment?", freq:12.4, keep:true, note:"最高频，直接对应「52dB Quiet」"},
+ {q:"Can I install this without an electrician?", freq:9.8, keep:true, note:"DIY 安装场景，写入 Bullet 2"},
+ {q:"Does this work for a rental with no vent?", freq:8.2, keep:true, note:"Ductless 场景，Highlights 已覆盖"},
+ {q:"How loud is it at night mode?", freq:6.5, keep:true, note:"新兴场景，7 月监控上升"},
+ {q:"What size cooktop does this fit?", freq:5.9, keep:true, note:"合规必答（尺寸）"},
+ {q:"Can I control this with Alexa?", freq:4.3, keep:false, note:"当前 SKU 不支持语音，剔除避免误导"},
+ {q:"Is the filter dishwasher-safe?", freq:3.8, keep:true, note:"清洁场景，Bullet 4"},
+];
+
+/* 知识库文件 */
+const KB_FILES = [
+ ["COMFEE_Range_Hood_Alexa_FollowUps_20260706.jsonl","Alexa Follow-up","油烟机","今天 08:12",true],
+ ["Broan_CVU30_Listing_Snapshot_20260704.html","竞品 Listing","油烟机","07-04",true],
+ ["A_B_Result_CVU30W4AST_14days.pdf","A/B 报告","油烟机","07-05",true],
+ ["Rufus_Community_Feedback_RangeHood_Jun.csv","Rufus Feedback","油烟机","06-30",true],
+ ["Amazon_Modular_Titles_Guidelines_v3.pdf","政策文档","—","06-15",true],
+ ["COMFEE_Product_Specs_Master_Sheet.xlsx","产品规格","全品类","06-01",true],
+ ["Portable_AC_Alexa_Summary_Draft.txt","场景提取","便携空调","07-02",false],
+];
+
+/* =====================================================================
+   工具
+===================================================================== */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+let toastTimer;
+function toast(t){
+  const el=$("toast");el.textContent=t;el.classList.add("show");
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove("show"),2600);
+}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
+function escAttr(s){return esc(s).replace(/"/g,"&quot;")}
+function closeModal(id){$(id).classList.remove("open")}
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){["siteOverlay","resOverlay"].forEach(closeModal);$("feeds").classList.remove("open");}
+});
+
+/* 导航 */
+const CRUMBS={home:"对话",dash:"运营总览",projects:"我的项目",research:"我的研究",kb:"知识库",project:"我的项目 › COMFEE 油烟机 · V3"};
+function go(view,btn){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("on"));
+  $("view-"+view).classList.add("on");
+  document.querySelectorAll(".side-btn[data-nav]").forEach(b=>b.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  else{const b=document.querySelector(`.side-btn[data-nav="${view==="project"?"projects":view}"]`);if(b)b.classList.add("active");}
+  $("crumb").innerHTML=view==="project"?`我的项目 › <b>COMFEE 油烟机 · V3</b>`:CRUMBS[view]||"";
+}
+function newChat(){location.reload()}
+function toggleFeeds(){
+  $("feeds").classList.toggle("open");
+  $("bellBadge").hidden=true;
+  document.querySelectorAll(".feed-item").forEach(f=>f.classList.remove("unread"));
+}
+$("bellBtn").onclick=toggleFeeds;
+function pushFeed(title,body){
+  const d=document.createElement("div");
+  d.className="feed-item unread";
+  d.innerHTML=`<b>${title}</b>${body}<span class="tm">刚刚</span>`;
+  $("feedsBody").prepend(d);
+  const bd=$("bellBadge");bd.hidden=false;bd.textContent=(+(bd.textContent||0))+1||1;
+}
+function toggleScope(e){e.stopPropagation();$("scopeMenu").classList.toggle("open")}
+function setScope(name,btn){
+  $("scopeName").textContent=name;
+  document.querySelectorAll("#scopeMenu button").forEach(b=>b.classList.remove("cur"));
+  btn.classList.add("cur");$("scopeMenu").classList.remove("open");
+  toast(`对话范围已切换：${name}`);
+}
+document.addEventListener("click",e=>{
+  if(!e.target.closest("#scopeChip"))$("scopeMenu").classList.remove("open");
+  if(!e.target.closest(".ver-chip"))$("verMenu").classList.remove("open");
+});
+
+/* =====================================================================
+   首页对话
+===================================================================== */
+let heroGone=false;
+function clearHero(){if(!heroGone){$("hero").remove();heroGone=true;}}
+function scrollHome(){const s=$("homeScroll");s.scrollTo({top:s.scrollHeight,behavior:"smooth"})}
+function addMsg(role,html){
+  clearHero();
+  const d=document.createElement("div");
+  d.className="msg "+role;
+  d.innerHTML=`<div class="who">${role==="user"?"T":"AI"}</div><div class="bubble">${html}</div>`;
+  $("homeChat").appendChild(d);scrollHome();saveRecChat();return d.querySelector(".bubble");
+}
+async function aiSay(html,delay=700){
+  const b=addMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
+  await sleep(delay);b.innerHTML=html;scrollHome();saveRecChat();return b;
+}
+
+/* 推荐对话持久化 */
+const REC_KEY="listing_rec_chat";
+let recChatActive=false;
+function fmtNow(){
+  const d=new Date(),p=n=>String(n).padStart(2,"0");
+  return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function saveRecChat(){
+  if(!recChatActive)return;
+  const clone=$("homeChat").cloneNode(true);
+  clone.querySelectorAll(".msg").forEach(m=>{if(m.querySelector(".typing"))m.remove();});
+  clone.querySelectorAll(".hist-banner").forEach(b=>b.remove());
+  try{
+    const prev=localStorage.getItem(REC_KEY);
+    localStorage.setItem(REC_KEY,JSON.stringify({
+      html:clone.innerHTML,
+      title:"COMFEE 油烟机 · Listing 优化",
+      step:recStepNow,sub:recSubNow,subLabel:recSubLabel,
+      time:prev?JSON.parse(prev).time:fmtNow(),
+      updated:fmtNow()
+    }));
+  }catch(e){}
+  showRecHistItem();
+}
+function showRecHistItem(){
+  let saved;try{saved=JSON.parse(localStorage.getItem(REC_KEY));}catch(e){}
+  if(!saved)return;
+  $("recHistItem").hidden=false;
+  $("recHistTime").textContent=`更新于 ${saved.updated}`;
+}
+function clearRecChat(e){
+  e.stopPropagation();
+  localStorage.removeItem(REC_KEY);
+  $("recHistItem").hidden=true;
+  recChatActive=false;
+  toast("已删除该历史对话");
+}
+function restoreRecChat(){
+  let saved;try{saved=JSON.parse(localStorage.getItem(REC_KEY));}catch(e){}
+  if(!saved){toast("暂无已保存的对话");return;}
+  go("home",document.querySelector('.side-btn[data-nav="home"]'));
+  heroGone=true;
+  recChatActive=true;
+  const banner=`<div class="hist-banner" style="text-align:center;font-size:11.5px;color:var(--ink-3);padding:8px 0 14px;border-bottom:1px dashed var(--line);margin-bottom:16px">
+    ↩ 历史对话「${saved.title}」· ${saved.time} 发起 · ${saved.updated} 最后更新 —— 可继续对话或回看完整过程</div>`;
+  $("homeChat").innerHTML=banner+saved.html;
+  if(saved.step){setRecStep(saved.step);if(saved.sub!=null)setRecSub(saved.sub,saved.subLabel||"");}
+  scrollHome();
+  toast("已恢复历史对话");
+}
+function freeSend(){
+  const v=$("homeInput").value.trim();if(!v)return;
+  $("homeInput").value="";addMsg("user",esc(v));
+  if(asinFieldIdx>=0){asinAnswer(v);return;}
+  aiSay(`这是可点击原型，自由问答未接入真实模型。可直接点击下方入口体验完整路径：
+  <div class="qr-row">
+    <button class="qr" onclick="startListing()">🚀 开始 AI Listing 优化</button>
+    <button class="qr" onclick="askGeneral()">💡 看一个通用问答示例</button>
+  </div>`);
+}
+$("homeInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();freeSend();}});
+
+async function askGeneral(){
+  addMsg("user",'Alexa 上 "range hood for apartment" 场景谁在赢？');
+  await aiSay(`过去 30 天，Alexa 该场景的推荐 Share of Voice 分布：
+    <ul>
+      <li><b>Broan</b> · 31%（长期霸占，标题含 "Ultra-Quiet"）</li>
+      <li><b>COMFEE</b> · 23%（V3 优化后，从 12% 提升）</li>
+      <li><b>COSMO</b> · 18%（近 7 天上升，新增 A+ 视频）</li>
+      <li><b>Zline / GE / IKEA</b> 合计 28%</li>
+    </ul>
+    <p>COMFEE 追平 Broan 的关键差距在<b>「apartment-friendly」明确标签</b>（Broan 未直接使用）与<b>Q&A 中 "install without drilling"</b>（当前无匹配）。基于此可以生成一次差异化迭代。</p>
+    <p><span class="src">Alexa Shopping API · 2026-07-06</span><span class="src">Citation Analysis</span></p>
+    <div class="qr-row"><button class="qr" onclick="startListing()">🚀 基于此触发一次 Listing 优化</button></div>`,1100);
+}
+
+async function startMigration(){
+  addMsg("user","帮我批量把旧标题拆成 Modular Title（Item Name + Highlights）。");
+  await aiSay(`收到。品类内 300+ SKU 的旧标题会自动过一遍拆分规则：<b>核心产品名 → Item Name（≤75 chars）</b>、<b>关键卖点/场景 → Item Highlights（≤125 chars）</b>；拆分完成后每个 SKU 都会先出<b>诊断评分</b>再入 A/B。
+  <div class="qr-row">
+    <button class="qr" onclick="enterProject()">📁 进入项目查看已迁移的 12 个 ASIN</button>
+    <button class="qr ghost" onclick="toast('演示原型：批量迁移工具入口未实现，可从对话说\\'先做油烟机品类\\'')">先做油烟机品类</button>
+  </div>`);
+}
+async function startAudit(){
+  addMsg("user","给我一个 ASIN 的 8 维度评分。");
+  await aiSay(`可以直接给我一个 ASIN。这里演示 <b>B08GK4VPMR · COMFEE CVU30W4AST 30" Slim Range Hood</b> 的评分：
+  ${scoreBreakdownHTML(ASINS[0])}
+  <div class="qr-row"><button class="qr" onclick="startListing()">基于差距启动 6 步优化</button></div>`,900);
+}
+
+/* ===== 步骤条控制 ===== */
+const REC_SUBS={
+  1:["接收 ASIN 画像","确认数据源清单","多源抓取执行","证据评审"],
+  2:["追加数据源（可选）","生成 Item Name / Highlights","生成 Bullets ×5 / Q&A ×10","Backend Keywords + A+ 骨架"],
+  3:["8 维度打分","阈值判定 ≥80","权重调整（可选）"],
+  4:["A/B 实验设计","上线 14 天采集","显著性判定"],
+};
+let recStepNow=0,recSubNow=0,recSubLabel="";
+function setRecStep(n){
+  recStepNow=n;recSubNow=0;recSubLabel="";
+  $("recSteps").classList.add("on");
+  for(let i=1;i<=4;i++){
+    const li=$("rstep"+i);
+    li.className=i<n?"done":i===n?"active":"";
+    li.querySelector(".rs-dot").textContent=i<n?"✓":i;
+    $("rsubs"+i).innerHTML=i===n?(REC_SUBS[i]||[]).map(t=>`<li><i></i><span>${t}</span></li>`).join(""):"";
+  }
+  if(n>=1&&n<=4)setRecSub(0);
+}
+function setRecSub(idx,label){
+  recSubNow=idx;recSubLabel=label||"";
+  const ul=$("rsubs"+recStepNow);if(!ul)return;
+  [...ul.children].forEach((li,i)=>{
+    li.className=i<idx?"done":i===idx?"active":"";
+    li.querySelector("span").textContent=(i===idx&&label)?label:(REC_SUBS[recStepNow]||[])[i];
+  });
+}
+
+/* ===== Step 1: 项目基础信息 · ASIN 输入 ===== */
+const ASIN_FIELDS = [
+ {key:"asin",  label:"ASIN",           sample:"B08GK4VPMR"},
+ {key:"cat",   label:"品类",            sample:"Range Hood 30 英寸"},
+ {key:"model", label:"型号",            sample:"COMFEE CVU30W4AST"},
+ {key:"market",label:"目标站点",         sample:"美国站 (US)"},
+ {key:"goal",  label:"核心业务目标",     sample:'搜索结果排名进入第一页 + 进入 Alexa "range hood for apartment" 场景 TOP 3'},
+];
+let asinAnswers={}, asinFieldIdx=-1;
+
+async function startListing(){
+  recChatActive=true;
+  setRecStep(1);
+  addMsg("user","帮我为一款 SKU 走一次 Listing 优化。");
+  await aiSay(`好的，先确认这次优化的对象。共需 5 项基础信息：
+    <ul style="margin:6px 0 4px"><li>1. ASIN</li><li>2. 品类</li><li>3. 型号</li><li>4. 目标站点</li><li>5. 核心业务目标（可选）</li></ul>
+    <p style="font-size:12px;color:var(--ink-3)">逐项回复即可，全部提供后会汇总为「ASIN 画像」供你核对，作为后续 6 步闭环的输入。</p>`);
+  asinAnswers={}; asinFieldIdx=0;
+  await askAsinField();
+}
+async function askAsinField(){
+  const f=ASIN_FIELDS[asinFieldIdx];
+  setRecSub(0,`接收 ASIN 信息 ${asinFieldIdx+1}/${ASIN_FIELDS.length} · ${f.label}`);
+  await aiSay(`请提供 <b>${asinFieldIdx+1} / ${ASIN_FIELDS.length} · ${f.label}</b>：
+  <div class="qr-row"><button class="qr ghost" style="text-align:left;white-space:normal" onclick="asinQuick(${asinFieldIdx})">示例：${esc(f.sample)}</button></div>`,500);
+}
+function asinQuick(i){
+  if(i!==asinFieldIdx)return;
+  addMsg("user",esc(ASIN_FIELDS[i].sample));
+  asinAnswer(ASIN_FIELDS[i].sample);
+}
+async function asinAnswer(v){
+  asinAnswers[ASIN_FIELDS[asinFieldIdx].key]=v;
+  asinFieldIdx++;
+  if(asinFieldIdx<ASIN_FIELDS.length){await askAsinField();}
+  else{asinFieldIdx=-1;await showAsinCard();}
+}
+async function showAsinCard(){
+  setRecSub(1);
+  const val=k=>asinAnswers[k]||"";
+  await aiSay(`5 项信息就位。请核对下方 ASIN 画像，确认后会根据业务目标推荐一份多源数据清单（Alexa + 搜索词 + 竞品 + 评论社交），你可以增删或上传自定义数据后再开始抓取：
+  <div class="form-card">
+    <div class="fc-h">ASIN 画像 · ${esc(val("model")||val("asin"))}</div>
+    <div class="fc-b">
+      <div class="f-field"><label>ASIN *</label><input id="af_asin" value="${escAttr(val("asin"))}"></div>
+      <div class="f-field"><label>品类 *</label><input id="af_cat" value="${escAttr(val("cat"))}"></div>
+      <div class="f-field"><label>型号 *</label><input id="af_model" value="${escAttr(val("model"))}"></div>
+      <div class="f-field"><label>目标站点 *</label><input id="af_market" value="${escAttr(val("market"))}"></div>
+      <div class="f-field full"><label>核心业务目标（会作为评分权重的锚点）</label><textarea id="af_goal" rows="2">${esc(val("goal"))}</textarea></div>
+    </div>
+    <div class="fc-foot">
+      <button class="btn" id="profileOk" onclick="confirmProfile(this)">✓ 确认，配置数据源</button>
+      <span style="font-size:11.5px;color:var(--ink-3)">画像会保存到项目，可在“我的项目”里回溯</span>
+    </div>
+  </div>`,700);
+}
+
+/* ===== Step 1 · 数据源确认（画像 → 数据源清单 → 抓取 → 证据评审）===== */
+async function confirmProfile(btn){
+  btn.disabled=true;btn.textContent="✓ 已确认";
+  ["asin","cat","model","market","goal"].forEach(k=>{const el=$("af_"+k);if(el)asinAnswers[k]=el.value.trim();});
+  setRecSub(1);
+  const hasRank=/搜索|排名|第一页|排行|top ?\d|page ?1|自然流量/i.test(asinAnswers.goal||"");
+  const preface=hasRank
+    ? `✓ ASIN 画像已保存。<b>检测到目标包含「搜索排名进入第一页」</b>——这不是单靠 Alexa 场景数据能达成的。搜索排名的三大支点是 <b>A9 关键词覆盖 · 高价值搜索词命中 · 竞品差异化</b>，因此除了 Alexa 三路，我默认再加上 <b>Brand Analytics 搜索词报告 · SP 广告搜索词 · 竞品 Listing 抓取</b>共 6 路；另有 2 路可选，也可以上传自定义数据（例如新的竞品 ASIN 或品牌方最新话术）。`
+    : `✓ ASIN 画像已保存。默认启用 Alexa 三路 + 搜索词与竞品参考共 6 路数据源；另有 2 路可选，也可以上传自定义数据。`;
+  await aiSay(`${preface}
+    <div class="qr-row"><button class="qr primary" onclick="openDataSources('prep')">📡 打开数据源清单（8 路 + 自定义）</button></div>`,800);
+}
+
+/* 数据源清单 · 单一事实：默认启用 6 路，2 路可选，可上传自定义 */
+const DATA_SOURCES=[
+ {id:"s1",cat:"Alexa 三路",name:"Alexa AI Summary",desc:"产品被 Alexa 描述/推荐的方式",on:true,locked:true,ev:"14 条描述范式"},
+ {id:"s2",cat:"Alexa 三路",name:"Alexa Follow-up Questions",desc:"用户 30 天内的追问场景与频次",on:true,locked:true,ev:"7 条 · 12,428 样本"},
+ {id:"s3",cat:"Alexa 三路",name:"Product Describe",desc:"AI 对产品属性 (COSMO NER) 的理解",on:true,locked:true,ev:"42 个属性对齐"},
+ {id:"s4",cat:"搜索排名",  name:"Brand Analytics 搜索词报告",desc:"品类 TOP 100 高流量搜索词 + 排名位置",on:true,recommend:"搜索第一页目标必开",ev:"TOP 100 待抓取"},
+ {id:"s5",cat:"搜索排名",  name:"SP 广告搜索词报告",desc:"过去 30 天转化率 ≥5% 的关键词",on:true,recommend:"定位买家真实用词",ev:"高转化词 待抓取"},
+ {id:"s6",cat:"搜索排名",  name:"品类关键词排名快照",desc:"当前主 SKU 在各关键词的排名位置（Rank Tracker）",on:false,ev:"—"},
+ {id:"s7",cat:"竞品参考",  name:"竞品 Listing 抓取（Broan / COSMO / Zline TOP 3）",desc:"Modular Title 结构 + Bullets + Q&A + A+",on:true,recommend:"用于差异化",ev:"3 个竞品 待抓取"},
+ {id:"s8",cat:"评论社交",  name:"Rufus Community Feedback",desc:"评论情感洞察与高频短语（近 30 天）",on:false,ev:"—"},
+];
+let customSources=[];
+let dataSourcePhase="prep"; /* prep=首次配置  topup=生成前追加 */
+
+function openDataSources(phase){
+  dataSourcePhase=phase||dataSourcePhase||"prep";
+  if(dataSourcePhase==="prep"&&recStepNow===1)setRecSub(1);
+  if(dataSourcePhase==="topup"&&recStepNow===2)setRecSub(0);
+  $("pvTitle").textContent=dataSourcePhase==="topup"?"追加数据源 · 生成前":"数据源清单 · 证据基础配置";
+  $("pvSub").textContent=`${asinAnswers.model||asinAnswers.asin||"COMFEE CVU30W4AST"} · 目标：${(asinAnswers.goal||"").slice(0,42)}${(asinAnswers.goal||"").length>42?"…":""}`;
+  renderDataSources();
+  $("preview").classList.add("open");
+}
+function renderDataSources(){
+  const cats={};
+  DATA_SOURCES.forEach(s=>{cats[s.cat]=cats[s.cat]||[];cats[s.cat].push(s);});
+  const catBlocks=Object.entries(cats).map(([cat,arr])=>{
+    const items=arr.map(s=>`
+      <div style="border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:6px;opacity:${s.on?1:.55}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="switch ${s.on?"on":""}" ${s.locked?'style="opacity:.6;cursor:default"':""} onclick="${s.locked?"":`toggleDataSource('${s.id}')`}" aria-label="开关 ${escAttr(s.name)}"></button>
+          <div style="flex:1;min-width:0">
+            <b style="font-size:12.5px;color:var(--amz-navy)">${esc(s.name)}${s.locked?' <span style="font-size:10px;color:var(--ink-3);font-weight:400">必备</span>':""}${s.recommend?` <span style="font-size:10px;color:var(--amz-orange-dark);background:var(--amz-orange-wash);border-radius:4px;padding:1px 6px;margin-left:4px">推荐 · ${esc(s.recommend)}</span>`:""}</b>
+            <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">${esc(s.desc)}</div>
+          </div>
+          <span style="font-size:11px;color:var(--ink-3);white-space:nowrap;margin-left:6px">${esc(s.ev)}</span>
+        </div>
+      </div>`).join("");
+    return `<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase">${esc(cat)}</div>${items}</div>`;
+  }).join("");
+  const custom=customSources.length
+    ? customSources.map(c=>`<div style="border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin-bottom:6px;font-size:12px;background:var(--amz-orange-wash);display:flex;align-items:center;gap:8px"><b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(c.name)}</b><span style="color:var(--ink-3);font-size:11px">${esc(c.note||"")}</span></div>`).join("")
+    : `<div style="font-size:11.5px;color:var(--ink-3);text-align:center;padding:10px 0;border:1px dashed var(--line);border-radius:9px">还未添加自定义数据</div>`;
+  const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
+  const btnText=dataSourcePhase==="topup"?`✓ 追加 ${on} 路数据源并生成内容`:`✓ 确认 ${on} 路数据源，开始抓取`;
+  $("pvBody").innerHTML=`
+    <p style="font-size:12px;color:var(--ink-2);margin-bottom:12px">${dataSourcePhase==="topup"?"生成前最后追加数据源的机会。已启用的 6 路会跳过重复抓取，只对新增源执行。":"所有数据抓取后先做证据评审，再交给 Bedrock 生成内容。"}当前启用 <b class="num">${on}</b> 路数据源。</p>
+    ${catBlocks}
+    <div style="margin-bottom:12px"><div style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase">自定义补充（可选）</div>
+    ${custom}
+    <div class="qr-row" style="margin-top:8px">
+      <button class="qr ghost" onclick="uploadCustomSource('csv')">📎 上传 CSV / Excel</button>
+      <button class="qr ghost" onclick="uploadCustomSource('asin')">🔗 粘贴竞品 ASIN</button>
+      <button class="qr ghost" onclick="uploadCustomSource('note')">📝 品牌方调研纪要</button>
+    </div></div>
+    <div style="position:sticky;bottom:0;background:#fff;padding:10px 0;border-top:1px solid var(--line);margin-top:8px">
+      <button class="btn" onclick="confirmDataSources()">${btnText}</button>
+    </div>`;
+}
+function toggleDataSource(id){
+  const s=DATA_SOURCES.find(x=>x.id===id);
+  if(!s||s.locked)return;
+  s.on=!s.on;
+  renderDataSources();
+}
+function uploadCustomSource(type){
+  const templates={
+    csv:{name:"Broan_CVU30_Bullets_2026Q2.csv",note:"32 条 Bullets · 已解析",fresh:true},
+    asin:{name:"B0BXK6L2VP / B0YMK3W7QQ / B0Z8CN2X9L",note:"3 个竞品 · 加入抓取队列",fresh:true},
+    note:{name:"品牌方 6 月调研纪要.md",note:"4 条关键取向 · 已解析",fresh:true},
+  };
+  customSources.push(templates[type]);
+  renderDataSources();
+  toast(`已加入自定义数据源：${templates[type].name}`);
+}
+async function confirmDataSources(){
+  closePreview();
+  const phase=dataSourcePhase;
+  const enabled=DATA_SOURCES.filter(s=>s.on);
+  const on=enabled.length+customSources.length;
+  addMsg("user",phase==="topup"?`追加 ${on} 路数据源并进入内容生成。`:`确认 ${on} 路数据源，开始抓取。`);
+
+  if(phase==="topup"){
+    /* 生成前追加：只跑新增的自定义源与新启用的可选源，然后进入生成 */
+    const newOnes=[...customSources.filter(c=>c.fresh),...enabled.filter(s=>s.fresh)];
+    customSources.forEach(c=>c.fresh=false);
+    enabled.forEach(s=>s.fresh=false);
+    if(newOnes.length){
+      await aiSay(`AgentCore 只抓取新增源，已启用 6 路跳过重复：
+        <div class="prog-card">${newOnes.map((s,i)=>`<div class="prog-line ${i===0?"doing":""}" id="pgT${i}"><span class="st">${i===0?'<span class="spinner"></span>':"○"}</span>${esc(s.name)}</div>`).join("")}</div>`,600);
+      for(let i=0;i<newOnes.length;i++){
+        await sleep(700);
+        const el=$("pgT"+i);if(el){el.className="prog-line ok";el.innerHTML=`<span class="st">✔</span>${esc(newOnes[i].name)} · 已并入证据表`;scrollHome();}
+      }
+    }
+    setRecStep(2);setRecSub(1);
+    await aiSay(`证据表已刷新，共 <b class="num">${on}</b> 路数据源支撑。Bedrock（Claude Sonnet 4）开始生成 Modular Title / Bullets / Q&A / A+ 骨架 / Backend Keywords…`,900);
+    await sleep(1500);
+    await runGeneration(scenarioKept());
+    return;
+  }
+
+  /* 首次配置 · 完整多路抓取动画 */
+  setRecSub(2);
+  await aiSay(`Bedrock AgentCore 多源抓取器已启动，演示原型将各路进度快进：
+    <div class="prog-card" id="progCard">
+      ${enabled.map((s,i)=>`<div class="prog-line ${i===0?"doing":""}" id="pgS${s.id}"><span class="st">${i===0?'<span class="spinner"></span>':"○"}</span>${esc(s.name)}</div>`).join("")}
+      ${customSources.map((c,i)=>`<div class="prog-line" id="pgC${i}"><span class="st">○</span>自定义：${esc(c.name)}</div>`).join("")}
+    </div>`,600);
+  const ev={s1:"14 条描述范式已抽取",s2:"7 条 Follow-up · 12,428 样本",s3:"42 个属性对齐 COSMO",s4:"TOP 100 关键词 · 品类覆盖率 68%",s5:"高转化词 23 个（CVR ≥ 5%）",s6:"主 SKU 排名 · 平均 P3.6",s7:"3 个竞品 · 96 条 Bullets/Q&A",s8:"Rufus 11 条 · 情感正向 82%"};
+  for(const s of enabled){
+    await sleep(650);
+    const el=$("pgS"+s.id);if(el){el.className="prog-line ok";el.innerHTML=`<span class="st">✔</span>${esc(s.name)} · ${esc(ev[s.id]||"")}`;scrollHome();}
+    customSources.forEach(c=>c.fresh=false);
+  }
+  for(let i=0;i<customSources.length;i++){
+    await sleep(600);
+    const el=$("pgC"+i);if(el){el.className="prog-line ok";el.innerHTML=`<span class="st">✔</span>自定义：${esc(customSources[i].name)} · 已并入证据表`;scrollHome();}
+    customSources[i].fresh=false;
+  }
+  setRecSub(3);
+  const kwCount=DATA_SOURCES.find(s=>s.id==="s4").on?23:0;
+  const compCount=DATA_SOURCES.find(s=>s.id==="s7").on?5:0;
+  await aiSay(`✓ <b>${on}</b> 路数据源抓取完毕并对齐到统一证据表，共 <b>${7+kwCount+compCount+customSources.length*2}</b> 条候选证据：
+    <ul>
+      <li>Alexa Follow-up 场景 <b>7</b> 条（按频次）</li>
+      ${kwCount?`<li>高价值搜索词 <b>${kwCount}</b> 个（CVR ≥ 5%，含"apartment range hood"、"ductless range hood"、"30 inch quiet range hood" TOP 3）</li>`:""}
+      ${compCount?`<li>竞品差异化点 <b>${compCount}</b> 条（Broan 独占 "Ultra-Quiet"、COSMO 独占 "Chef-Style"）</li>`:""}
+      ${customSources.length?`<li>自定义数据 <b>${customSources.length}</b> 项已并入</li>`:""}
+    </ul>
+    <p>这些证据决定后续 Bullet / Q&A / Backend Keywords 的写法。请逐条评审（AI 已在高频、高转化、高差异化上做标注）：</p>
+    <div class="qr-row"><button class="qr" onclick="openScenarioReview()">📋 在右侧评审证据</button></div>`,1100);
+}
+function scenarioKept(){return Object.values(scenarioDecisions).filter(v=>v).length}
+const scenarioDecisions={};
+SCENARIOS.forEach((s,i)=>scenarioDecisions[i]=s.keep);
+function openScenarioReview(){
+  if(recStepNow===1)setRecSub(2);
+  $("pvTitle").textContent="Alexa Follow-up 评审";
+  $("pvSub").textContent="COMFEE CVU30W4AST · 候选 7 条 · 确认后作为 Step 2 的输入";
+  renderScenarioReview();
+  $("preview").classList.add("open");
+}
+function renderScenarioReview(){
+  const kept=Object.values(scenarioDecisions).filter(v=>v).length;
+  const items=SCENARIOS.map((s,i)=>{
+    const keep=scenarioDecisions[i];
+    const suggest=s.keep?"":'<span style="font-size:10.5px;color:var(--b-fg);background:var(--amz-orange-wash);border-radius:4px;padding:1px 6px;margin-left:6px">AI 建议剔除</span>';
+    return `<div style="border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:8px;opacity:${keep?1:.5};${!s.keep?"border-left:3px solid var(--amz-orange);":""}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <b style="flex:1;font-size:12.5px">"${s.q}"</b>${suggest}
+        <button class="qr ${keep?"ghost":""}" style="padding:3px 10px;font-size:11.5px" onclick="toggleScenario(${i})">${keep?"剔除":"恢复"}</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--ink-3);margin-top:5px">30 天频次 <b class="num">${s.freq}%</b> · ${s.note}</div>
+    </div>`;
+  }).join("");
+  const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
+  const kwOn=DATA_SOURCES.find(s=>s.id==="s4").on;
+  const compOn=DATA_SOURCES.find(s=>s.id==="s7").on;
+  $("pvBody").innerHTML=`
+    <div style="background:var(--amz-blue-wash);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--amz-navy);line-height:1.7">
+      <b>📡 多源证据已就位（${on} 路）：</b>
+      Alexa Follow-up 7 条${kwOn?" · 高价值搜索词 23 个":""}${compOn?" · 竞品差异化 5 条":""}${customSources.length?` · 自定义 ${customSources.length} 项`:""} · Rufus 引用 11 条
+      <br><span style="color:var(--ink-3);font-size:11px">下方评审仅针对 Alexa Follow-up；搜索词与竞品差异化点会直接并入 Bedrock 生成 Prompt，不再逐条勾选。</span>
+    </div>
+    <p style="font-size:12px;color:var(--ink-2);margin-bottom:10px">保留的场景会作为 Bullet Points 与 Q&A 的证据基础。当前保留 <b class="num">${kept}</b> / 7 条。</p>
+    ${items}
+    <div style="position:sticky;bottom:0;background:#fff;padding:10px 0;border-top:1px solid var(--line)">
+      <button class="btn" onclick="confirmScenarios()">✓ 确认保留 ${kept} 条，进入内容生成</button>
+    </div>`;
+}
+function toggleScenario(i){scenarioDecisions[i]=!scenarioDecisions[i];renderScenarioReview();}
+async function confirmScenarios(){
+  const kept=Object.values(scenarioDecisions).filter(v=>v).length;
+  closePreview();
+  addMsg("user",`确认保留 ${kept} 条场景。`);
+  const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
+  await aiSay(`✓ 场景集已确认（${kept} 条）。当前证据基础：<b>${on}</b> 路数据源。<br><br>Bedrock 生成即将启动。如果这时突然想到应该再补一路数据源（比如刚拿到的<b>新竞品 ASIN</b>、<b>品牌方最新话术纪要</b>、或者要打开<b>Rufus Community Feedback</b> 抓评论情感），现在是最后机会——补进来会立即并入证据表，然后一起生成。
+    <div class="qr-row">
+      <button class="qr primary" onclick="toGeneration(${kept})">✓ 证据足够，开始生成</button>
+      <button class="qr" onclick="openDataSources('topup')">➕ 追加数据源后再生成</button>
+    </div>`,800);
+}
+async function toGeneration(kept){
+  addMsg("user","证据足够，开始生成。");
+  setRecStep(2);setRecSub(1);
+  await aiSay(`Bedrock（Claude Sonnet 4）生成 Modular Title / Bullets / Q&A / A+ 骨架 / Backend Keywords 中…`,700);
+  await sleep(1500);
+  await runGeneration(kept);
+}
+
+/* ===== Step 2 · 内容生成 ===== */
+async function runGeneration(kept){
+  setRecSub(3);
+  const asin=ASINS[0];
+  const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
+  const kwOn=DATA_SOURCES.find(s=>s.id==="s4").on;
+  await aiSay(`内容生成完成。证据基础：<b>${on}</b> 路数据源、场景 ${kept} 条${kwOn?"、高价值搜索词 23 个已植入 Backend Keywords 与 Bullets":""}${customSources.length?`、自定义数据 ${customSources.length} 项`:""}已全部纳入。这是 <b>Before / After</b> 对比：
+    <div class="ba-card">
+      <div class="ba-h">${esc(asin.asin)} · ${esc(asin.model)} · Modular Title 拆分</div>
+      <div class="ba-b">
+        <div class="ba-side before">
+          <div class="ba-tag">✗ BEFORE · 198 chars 单字段标题</div>
+          ${esc(asin.before.name)}
+          <small>Bullets：${asin.before.bullets.map(b=>"• "+esc(b)).join("<br>")}</small>
+          <small style="color:var(--risk)">Q&A：无 · AI 无法解析核心卖点</small>
+        </div>
+        <div class="ba-side after">
+          <div class="ba-tag">✓ AFTER · Modular Title 45 + 102 chars</div>
+          <b>Item Name：</b>${esc(asin.after.itemName)}<br>
+          <b>Highlights：</b>${esc(asin.after.highlights)}
+          <small>Bullets（场景化 ×5）：<br>${asin.after.bullets.map((b,i)=>"• "+esc(b)).join("<br>")}</small>
+          <small style="color:var(--a-fg)">Q&A ×${asin.after.qa} · 覆盖 TOP 场景</small>
+        </div>
+      </div>
+      <div class="ba-score">
+        <span>字符合规：<span class="num" style="color:var(--risk)">✗ 198</span> → <span class="num" style="color:var(--a-fg)">✓ 45 + 102</span></span>
+        <span>Backend Keywords：<span class="num">248 bytes</span></span>
+        <span>输出物：Item Name / Highlights / Bullets ×5 / Q&A ×10 / A+ 骨架 / Backend</span>
+      </div>
+    </div>
+    <div class="qr-row"><button class="qr primary" onclick="toScoring()">进入 Step 3 · AI 评分</button></div>`,1100);
+}
+
+/* ===== Step 3 · AI 评分 · 人工跟进清单 ===== */
+const HUMAN_TODOS=[
+ {id:"img",  dim:"视觉 7/12",title:"主图 · 缺 apartment 场景",
+  issue:'当前主图为白底产品照，Alexa 场景 <b>"apartment range hood"</b> 占本 SKU 命中的 32%，主图未做视觉承接。',
+  advice:'拍摄或合成 1 张 lifestyle 图：30" 油烟机装在小户型开放式厨房，暖光、餐桌可见。',
+  impact:"视觉分 7→10 · 预计 CVR +8%",
+  owner:"设计团队",eta:"3 个工作日",cost:null},
+ {id:"video",dim:"A+ 8/10",title:"A+ Content · 缺安装演示视频",
+  issue:'A+ 骨架已生成，但缺 <b>"20-Min Install"</b> 演示视频。当前退货 23% 与安装问题相关。',
+  advice:"拍 60s 安装演示视频：从开箱到通电全过程，突出无需电工。",
+  impact:"A+ 分 8→10 · 减少 32% 安装相关退货",
+  owner:"内容团队",eta:"5 个工作日",cost:null},
+ {id:"vine", dim:"评论 4/5",title:"Vine 计划 · 加速评论积累",
+  issue:'Broan 评论量 <b>8,241 vs 我们 2,847</b>（3× 差距）· 短期只能靠 Vine 追赶。',
+  advice:"申请 20 个 Vine 名额，测评期 30 天，产品送达率 90%+。",
+  impact:"评论 +30 · 社交分 4→5 · 30 天见效",
+  owner:"品牌运营",eta:"当天可申请",cost:"预算 $600"},
+];
+let todoStates={};
+HUMAN_TODOS.forEach(t=>todoStates[t.id]="pending");
+
+function renderTodoCard(){
+  const total=HUMAN_TODOS.length;
+  const done=Object.values(todoStates).filter(v=>v!=="pending").length;
+  const items=HUMAN_TODOS.map(t=>{
+    const st=todoStates[t.id];
+    const ic=st==="assigned"?"⏳":st==="skipped"?"✓":"○";
+    const tag=st==="assigned"?`<span class="todo-tag assigned">已指派 · ${esc(t.owner)}</span>`:st==="skipped"?`<span class="todo-tag skipped">已跳过</span>`:"";
+    return `<div class="todo-item ${st}">
+      <div class="ti-ic">${ic}</div>
+      <div class="ti-body">
+        <div class="ti-title"><b>${esc(t.title)}</b><span class="ti-dim">${esc(t.dim)}</span>${tag}</div>
+        <div class="ti-issue">${t.issue}</div>
+        <div class="ti-adv">💡 ${esc(t.advice)}</div>
+        <div class="ti-meta"><span class="imp">${esc(t.impact)}</span><span>👤 ${esc(t.owner)}</span><span>⏱ ${esc(t.eta)}</span>${t.cost?`<span>💰 ${esc(t.cost)}</span>`:""}</div>
+        <div class="ti-actions">
+          <button class="qr primary" style="padding:4px 12px;font-size:11.5px" onclick="assignTodo('${t.id}')">📤 指派给 ${esc(t.owner)}</button>
+          <button class="qr ghost" style="padding:4px 12px;font-size:11.5px" onclick="skipTodo('${t.id}')">跳过</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  const assignedCount=Object.values(todoStates).filter(v=>v==="assigned").length;
+  const summary=assignedCount>0
+    ? `🎯 <b>${assignedCount}</b> 项人工任务已指派 · 完成后自动回来提示重新评分 · 预计 AI-Ready 85 → 91`
+    : `🎯 完成 3 项人工任务预计 <b>AI-Ready 85 → 91</b> · 视觉与 A+ 是当前主要短板 · Vine 是评论量的最快通路`;
+  return `<div class="todo-card">
+    <div class="tc-h">📋 人工跟进清单 · AI 无法自动完成的部分 <span class="tc-cnt">${done} / ${total} 已处理</span></div>
+    ${items}
+    <div class="todo-summary">${summary}</div>
+  </div>`;
+}
+function refreshTodoCard(){const el=$("todoCard");if(el)el.innerHTML=renderTodoCard();}
+function assignTodo(id){
+  todoStates[id]="assigned";
+  refreshTodoCard();
+  const t=HUMAN_TODOS.find(x=>x.id===id);
+  toast(`✓ 已指派给 ${t.owner} · 预计 ${t.eta}`);
+  pushFeed("📤 人工任务已指派",`${t.title} · 指派给 ${t.owner} · 完成后自动回来提示重新评分`);
+}
+function skipTodo(id){
+  todoStates[id]="skipped";
+  refreshTodoCard();
+  toast("已跳过 · 该维度短板保留");
+}
+function assignAllTodos(){
+  let n=0;
+  HUMAN_TODOS.forEach(t=>{if(todoStates[t.id]==="pending"){todoStates[t.id]="assigned";n++;}});
+  refreshTodoCard();
+  if(n===0){toast("没有待指派的任务");return;}
+  toast(`已批量指派 ${n} 项人工任务`);
+  pushFeed("📤 批量指派人工任务",`${n} 项 · 设计 / 内容 / 品牌运营 · 完成后系统自动重新评分`);
+}
+
+function scoreBreakdownHTML(asin){
+  const total=DIMS.reduce((s,d)=>s+asin.dims[d.key],0);
+  const rows=DIMS.map(d=>{
+    const v=asin.dims[d.key],pct=(v/d.max)*100;
+    return `<div class="score-item">
+      <label>${d.name}</label>
+      <span class="track"><span class="fill" style="width:${pct}%"></span></span>
+      <span class="val">${v}/${d.max}</span>
+    </div>`;
+  }).join("");
+  return `<div class="result-card">
+    <div class="rc-h"><div class="rc-ic">📊</div><div><b>AI-Ready 评分 · ${esc(asin.asin)}</b><span>8 维度加权 · 阈值 ≥80 进入 A/B</span></div>
+      <span class="rc-badge ${total>=80?"pass":"warn"}">${total}/100 ${total>=80?"✓ 达标":"⚠ 待优化"}</span></div>
+    <div class="score-list">${rows}</div>
+  </div>`;
+}
+async function toScoring(){
+  addMsg("user","进入 AI 评分。");
+  setRecStep(3);
+  await aiSay(`调用 AgentCore Evaluations 做 LLM-as-Judge 打分，8 维度加权计算 AI-Ready Score …`,600);
+  await sleep(1200);
+  setRecSub(1);
+  const asin=ASINS[0];
+  await aiSay(`评分完成：<b>${asin.score}/100 ✓ 已达 ≥80 阈值</b>，符合入项目条件。相比原始基线 39/100，主要在 <b>场景化（+8）· AI 语义（+6）· GEO（+8）</b> 三个维度获得提升。
+    ${scoreBreakdownHTML(asin)}
+    <p style="font-size:12.5px;color:var(--ink-2);margin-top:10px">AI 生成的文本部分已达标。但 <b>视觉 7/12</b> 和 <b>A+ 8/10</b> 还有分数空间——<b>这些 AI 无法自动完成</b>（需要设计师、摄影、内容团队做具体产出）。我列了一份人工跟进清单，你可以选择：<b>指派后再跑 A/B</b>（分数更高，起跑线更好），或者<b>先直接进项目/A/B</b>（快速验证再补）。</p>
+    <div id="todoCard">${renderTodoCard()}</div>
+    <div class="qr-row" style="margin-top:12px">
+      <button class="qr primary" onclick="assignAllTodos()">📤 一键指派全部人工任务</button>
+      <button class="qr" onclick="saveProject('afterScore')">💾 保存到项目</button>
+      <button class="qr" onclick="toABTest()">🧪 直接进 A/B（跳过人工）</button>
+      <button class="qr ghost" onclick="openWeightPanel()">⚖️ 调整权重</button>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink-3);margin-top:8px">人工任务完成后会通过 Feeds 提醒你回来重新评分 · 也可以现在就入项目，人工任务会带着上下文转到"我的任务"（未做完不影响 Citation 监控与自动迭代运行）</p>`,900);
+}
+function openWeightPanel(){
+  if(recStepNow===3)setRecSub(2,"权重调整中");
+  $("pvTitle").textContent="8 维度权重 · 实时预览";
+  $("pvSub").textContent="拖动滑块，右侧评分会随权重变化实时刷新";
+  renderWeightPanel();
+  $("preview").classList.add("open");
+}
+function renderWeightPanel(){
+  const asin=ASINS[0];
+  const rows=DIMS.map(d=>`<div class="w-row">
+    <label>${d.name}</label>
+    <input type="range" min="0" max="30" value="${curW[d.key]}" oninput="onWeightChange('${d.key}',this.value)">
+    <span class="num" id="wnum_${d.key}">${curW[d.key]}%</span>
+  </div>`).join("");
+  const weighted=DIMS.reduce((s,d)=>s+(asin.dims[d.key]/d.max)*curW[d.key],0);
+  $("pvBody").innerHTML=`
+    <p style="font-size:12px;color:var(--ink-2);margin-bottom:10px">当前 ASIN 的加权 AI-Ready Score：<b class="num" id="pvWeightedScore" style="color:var(--amz-orange-dark);font-size:18px">${Math.round(weighted)}</b> / 100</p>
+    ${rows}
+    <p style="font-size:11px;color:var(--ink-3);margin-top:10px">规则：权重之和自动归一化到 100%；拖动任意维度，其余按比例微调。</p>
+    <div style="position:sticky;bottom:0;background:#fff;padding:10px 0;border-top:1px solid var(--line);margin-top:10px">
+      <button class="btn" onclick="confirmWeight()">✓ 应用权重并继续</button>
+    </div>`;
+}
+function onWeightChange(key,val){
+  curW[key]=+val;
+  const others=DIMS.filter(d=>d.key!==key);
+  const sum=DIMS.reduce((s,d)=>s+curW[d.key],0);
+  if(sum!==100){
+    const rest=100-curW[key];
+    const oSum=others.reduce((s,d)=>s+curW[d.key],0)||1;
+    others.forEach(d=>curW[d.key]=Math.round(curW[d.key]/oSum*rest));
+  }
+  DIMS.forEach(d=>{const el=$("wnum_"+d.key);if(el)el.textContent=curW[d.key]+"%";});
+  const asin=ASINS[0];
+  const weighted=DIMS.reduce((s,d)=>s+(asin.dims[d.key]/d.max)*curW[d.key],0);
+  const el=$("pvWeightedScore");if(el)el.textContent=Math.round(weighted);
+}
+async function confirmWeight(){
+  closePreview();
+  const asin=ASINS[0];
+  const weighted=Math.round(DIMS.reduce((s,d)=>s+(asin.dims[d.key]/d.max)*curW[d.key],0));
+  addMsg("user","应用调整后的权重。");
+  await aiSay(`✓ 权重已更新。加权 AI-Ready Score：<b class="num">${weighted}/100</b>。评分结果已固化到项目决策快照，可复现。
+    <div class="qr-row"><button class="qr primary" onclick="toABTest()">进入 A/B 测试</button></div>`,600);
+}
+
+/* ===== Step 4 · A/B 测试 ===== */
+async function toABTest(){
+  addMsg("user","开始 A/B 测试。");
+  setRecStep(4);
+  await aiSay(`Amazon Manage Your Experiments 已建好实验：A 组（原始 Listing）vs B 组（AI 优化 Listing）· 目标每组 ≥5,000 sessions · 计划 14 天 · 显著性阈值 p&lt;0.05。<br>
+    <div class="prog-card" id="progCard">
+      <div class="prog-line doing" id="pg1"><span class="st"><span class="spinner"></span></span>Day 1-3：流量 50/50 分流启动，采集基线</div>
+      <div class="prog-line" id="pg2"><span class="st">○</span>Day 4-10：观察 CVR / CTR / Alexa 命中率</div>
+      <div class="prog-line" id="pg3"><span class="st">○</span>Day 11-14：结算显著性，输出胜出方案</div>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink-3);margin-top:6px">演示原型：跳过等待，直接展示 14 天完整结果。</p>`,700);
+  const step=async(cur,next,txtDone,txtNext)=>{
+    await sleep(900);
+    const c=$(cur);c.className="prog-line ok";c.innerHTML=`<span class="st">✔</span>${txtDone}`;
+    if(next){const n=$(next);n.className="prog-line doing";n.innerHTML=`<span class="st"><span class="spinner"></span></span>${txtNext}`;}
+    scrollHome();
+  };
+  await step("pg1","pg2","Day 1-3：基线采集完成（6,214 sessions/组）","Day 4-10：数据趋势观察中，B 组 CVR 领先 50%+");
+  await step("pg2","pg3","Day 4-10 完成：B 组 CVR/CTR 均显著领先","Day 11-14：结算显著性…");
+  await step("pg3",null,"Day 11-14 结算完成：B 组胜出，全量上线","");
+  setRecSub(2);
+  const a=ASINS[0].ab;
+  await aiSay(`<b style="color:var(--a-fg)">✓ A/B 测试胜出</b>（14 天 · 12,847 sessions）：
+    <table class="ab-tbl">
+      <thead><tr><th>指标</th><th>A 组（原始）</th><th>B 组（AI 优化）</th><th>提升</th><th>显著性</th></tr></thead>
+      <tbody>
+        <tr><td>CVR 转化率</td><td class="num">3.2%</td><td class="num">${a.cvr}%</td><td class="win">+${a.cvrDelta}% ↑</td><td>p=0.003 ✓</td></tr>
+        <tr><td>CTR 点击率</td><td class="num">4.1%</td><td class="num">${a.ctr}%</td><td class="win">+${a.ctrDelta}% ↑</td><td>p=0.012 ✓</td></tr>
+        <tr><td>Alexa 命中率</td><td class="num">12%</td><td class="num">${a.alexaHit}%</td><td class="win">+${a.alexaDelta}% ↑</td><td>p&lt;0.001 ✓</td></tr>
+        <tr><td>退货率</td><td class="num">8.7%</td><td class="num">6.1%</td><td class="win">-30% ↓</td><td>p=0.041 ✓</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:8px;font-size:12px">Verdict：B 组胜出 → 全量上线。人工无需介入，系统已自动切换到 B 组内容。</p>
+    <div class="qr-row"><button class="qr primary" onclick="saveProject('afterAB')">💾 保存到项目（Citation 监控自动开启）</button></div>`,900);
+  pushFeed("✅ A/B 测试胜出","B08GK4VPMR CVR +62% 显著，B 组已全量上线。");
+}
+
+/* ===== 保存到项目 · Citation 监控与自动迭代由此接管 ===== */
+async function saveProject(from){
+  addMsg("user","保存到项目。");
+  const isAfterScore=from==="afterScore";
+  const model=asinAnswers.model||"COMFEE CVU30W4AST";
+  const badge=isAfterScore
+    ? `<span class="rc-badge pass">AI-Ready 85 · 入项目条件达标</span>`
+    : `<span class="rc-badge pass">A/B 胜出 · 已全量上线</span>`;
+  const abLine=isAfterScore
+    ? `<div class="cite-row"><span>🧪 A/B 测试</span><span class="v" style="color:var(--ink-3)">未启动 · 项目内可对单个 ASIN 随时启动</span></div>`
+    : `<div class="cite-row"><span>🧪 A/B 测试</span><span class="v" style="color:var(--a-fg)">✓ 已完成 · B 组全量上线 · CVR +62%</span></div>`;
+  await aiSay(`✔ 已保存到项目「COMFEE 油烟机」V3，与其他 11 个 ASIN 一同管理。项目里保留完整决策快照（画像、数据源清单、证据表、评分${isAfterScore?"":"、A/B 结果"}、权重）。
+    <div class="result-card">
+      <div class="rc-h"><div class="rc-ic">📁</div><div><b>入项目完成 · ${esc(model)}</b><span>下方两项持续能力已自动接管</span></div>${badge}</div>
+      <div style="padding:12px 16px;line-height:2">
+        <div class="cite-row"><span>📡 <b>Citation 监控</b></span><span class="v" style="color:var(--a-fg)">✓ 已启用 · 每 24h 刷新</span></div>
+        <div style="padding-left:20px;font-size:11.5px;color:var(--ink-3);margin-bottom:4px">采集 Alexa 命中率 / AI Share of Voice / 外部引用 / Rufus 引用</div>
+        <div class="cite-row"><span>🔄 <b>自动迭代</b></span><span class="v" style="color:var(--a-fg)">✓ 已启用 · 3 类触发器监听中</span></div>
+        <div style="padding-left:20px;font-size:11.5px;color:var(--ink-3);margin-bottom:4px">新 Follow-up · 退货率异常 · 竞品变化 · 关键改动进人工审核</div>
+        ${abLine}
+      </div>
+      <div class="rc-foot">
+        <button class="btn" onclick="enterProject()">📁 进入项目工作区</button>
+        <button class="btn sub" onclick="toast('演示原型：可在对话中说“把这次的 SOP 沉淀成模板给全品类用”')">📄 沉淀为品类 SOP</button>
+      </div>
+    </div>`,1100);
+  pushFeed("🎉 SKU 入项目",`${model} 已入「COMFEE 油烟机」项目 · Citation 与自动迭代接管。`);
+}
+
+/* ===== 右侧预览 ===== */
+function closePreview(){const p=$("preview");p.classList.remove("open");p.classList.remove("wide");}
+
+/* ===== 通用对话 · 多 ASIN 对比 + Amazon 买家视角 ===== */
+const CMP_ASINS=[
+ {asin:"B08GK4VPMR",brand:"COMFEE",own:true, img:"🍳",
+  title:"COMFEE 30-Inch Slim Under-Cabinet Range Hood, 200 CFM, Ducted/Ductless, 52dB Quiet, Apartment-Friendly",
+  price:189.99, listPrice:219.99, stars:4.3, reviews:2847, prime:true, deal:false, coupon:"$20 Off",
+  delivery:"Tue, Jul 14",
+  highlights:["200 CFM · Ducted/Ductless Convertible","52dB Whisper-Quiet · Apartment-Friendly","20-Min DIY Install, no electrician","3-Speed · Reusable Filters"],
+  aiScore:85, alexa:41},
+ {asin:"B08GK4S8LK",brand:"COMFEE",own:true, img:"🔥",
+  title:"COMFEE 36-Inch Wall-Mount Range Hood, 600 CFM, 55dB, Touch Panel, Open-Plan Kitchen",
+  price:269.99, listPrice:319.99, stars:4.5, reviews:1523, prime:true, deal:true, coupon:null,
+  delivery:"Tue, Jul 14",
+  highlights:["600 CFM · Ducted/Ductless","55dB · Open-Plan Kitchen","Touch Panel · Auto-Delay Off","Stainless Steel Finish"],
+  aiScore:88, alexa:44},
+ {asin:"B0BXK6L2VP",brand:"Broan",own:false, img:"⚙️",
+  title:"Broan-NuTone BUEZ130SS 30-Inch Ductless Range Hood, 3-Speed Blower, Ultra-Quiet 45dB",
+  price:279.00, listPrice:null, stars:4.4, reviews:8241, prime:true, deal:false, coupon:null,
+  delivery:"Wed, Jul 15",
+  highlights:["Ultra-Quiet 45dB Operation","3-Speed Blower with Charcoal Filter","Trusted Brand · 40+ Years","Stainless Steel Design"],
+  aiScore:81, alexa:33},
+];
+/* 可一键进入 Listing 优化的 ASIN 画像预设（含对比洞察带入的 goal）*/
+const ASIN_PROFILES={
+ "B08GK4VPMR":{
+   asin:"B08GK4VPMR",
+   cat:"Range Hood 30 英寸 · Under-Cabinet",
+   model:"COMFEE CVU30W4AST",
+   market:"美国站 (US)",
+   goal:'搜索结果排名进入第一页 · 缩小与 Broan 评论量差距（当前 1:3 → 目标 1:1.5 内）· Alexa "apartment range hood" 场景巩固 TOP 2',
+   from:"来自 3 ASIN 对比分析 · 洞察 #1 + #2"
+ },
+ "B08GK4S8LK":{
+   asin:"B08GK4S8LK",
+   cat:"Range Hood 36 英寸 · Wall-Mount",
+   model:"COMFEE CVW36W6AST",
+   market:"美国站 (US)",
+   goal:'主图与自家 30" 差异化（当前相似度 62% → 目标 <40%）· Alexa "open-plan kitchen" 场景 SoV 从 12% 提到 20%',
+   from:"来自 3 ASIN 对比分析 · 洞察 #3"
+ },
+};
+
+async function startListingWithAsin(asinKey){
+  const profile=ASIN_PROFILES[asinKey];
+  if(!profile){toast("演示原型：该 ASIN 未预置画像");return;}
+  addMsg("user",`基于对比分析，优化 ${asinKey}`);
+  closePreview();
+  recChatActive=true;
+  setRecStep(1);
+  asinAnswers={asin:profile.asin,cat:profile.cat,model:profile.model,market:profile.market,goal:profile.goal};
+  asinFieldIdx=-1;
+  await aiSay(`✓ 收到。已<b>自动填充 ${asinKey} 的画像</b>：
+    <ul style="margin:4px 0 2px">
+      <li>品类 · 型号 · 站点 <span style="color:var(--ink-3);font-size:11.5px">从 Amazon 详情页带入</span></li>
+      <li>核心业务目标 <span style="color:var(--q-purple-dark);font-size:11.5px;font-weight:600">${esc(profile.from)}</span> —— 已把对比分析发现的差距翻译成可衡量目标</li>
+    </ul>
+    <p style="margin-top:6px">跳过逐项询问，直接进入画像确认（每个字段仍可修改）：</p>`, 700);
+  await showAsinCard();
+}
+
+function fmtAmzPrice(p){
+  const [d,c]=p.toFixed(2).split(".");
+  return `<span class="amz-price">$${d}<span class="cent">${c}</span></span>`;
+}
+function starsHTML(v){const f=Math.floor(v),h=v-f>=.5;return "★".repeat(f)+(h?"½":"")+"☆".repeat(5-f-(h?1:0));}
+
+async function startCompareAsins(){
+  addMsg("user","对比 B08GK4VPMR、B08GK4S8LK、竞品 B0BXK6L2VP");
+  await aiSay(`已抓取 3 个 ASIN 的实时买家页面数据（价格 · Prime · 评分 · Buy Box · Highlights）并对齐到统一维度。<b>右侧同步渲染真实购物界面</b>——评分星星、价格、Buy Box 按钮都按 Amazon 实际布局，可直接感知用户视角。
+    <div class="result-card">
+      <div class="rc-h"><div class="rc-ic">⚖️</div><div><b>3 ASIN 对比分析</b><span>2 个自家 COMFEE · 1 个 Broan 竞品</span></div><span class="rc-badge pass">数据同步</span></div>
+      <table class="compare-tbl">
+        <thead><tr><th style="width:110px">维度</th>
+          <th><span class="brand-tag own">自家</span>B08GK4VPMR<br><span style="color:var(--ink-3);font-weight:400">COMFEE 30" Slim</span></th>
+          <th><span class="brand-tag own">自家</span>B08GK4S8LK<br><span style="color:var(--ink-3);font-weight:400">COMFEE 36" Wall</span></th>
+          <th><span class="brand-tag comp">竞品</span>B0BXK6L2VP<br><span style="color:var(--ink-3);font-weight:400">Broan 30"</span></th></tr></thead>
+        <tbody>
+          <tr><td>价格</td><td class="win">$189.99</td><td>$269.99</td><td class="lose">$279.00<br><span style="font-size:10.5px;color:var(--risk);font-weight:400">+47% vs 自家 30"</span></td></tr>
+          <tr><td>评分 / 评论</td><td>★4.3 · 2,847</td><td>★4.5 · 1,523</td><td>★4.4 · <b>8,241</b><br><span style="font-size:10.5px;color:var(--ink-3);font-weight:400">评论量 3× 领先</span></td></tr>
+          <tr><td>核心场景</td><td>Apartment · 52dB</td><td>Open-Plan · 55dB</td><td>Ultra-Quiet 45dB · 品牌</td></tr>
+          <tr><td>AI-Ready Score</td><td class="win">85</td><td class="win">88</td><td>81</td></tr>
+          <tr><td>Alexa 命中率</td><td class="win">41%</td><td class="win">44%</td><td>33%</td></tr>
+          <tr><td>Buy Box</td><td>98%</td><td>95%</td><td>92%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:10px"><b>💡 关键洞察</b>：</p>
+    <ul>
+      <li><b>Broan 单价 +47%</b>，但 AI-Ready 反低 4pp、Alexa 命中率低 8pp——价格优势可作为 COMFEE 核心卖点强化，A+ Content 明确对比。</li>
+      <li><b>Broan 评论量 3× 领先</b>（8,241 vs 2,847）· 社交信号是最大短板，建议加大 A+ 视频与 Vine 计划投入积累评论。</li>
+      <li>COMFEE 30" vs 36" 定位清晰（apartment vs open-plan），但<b>主图相似度 62%</b>——建议 36" 换生活场景图强化差异化。</li>
+    </ul>
+    <div style="margin-top:14px;padding:11px 13px;background:var(--q-purple-wash);border-radius:8px;border-left:3px solid var(--q-purple)">
+      <p style="font-size:12.5px;color:var(--q-purple-dark);font-weight:600;margin-bottom:8px">🚀 基于以上洞察，建议进入 Listing 优化：</p>
+      <div class="qr-row">
+        <button class="qr primary" onclick="startListingWithAsin('B08GK4VPMR')">优化 B08GK4VPMR · 追赶评论量差距</button>
+        <button class="qr primary" onclick="startListingWithAsin('B08GK4S8LK')">优化 B08GK4S8LK · 差异化主图与场景</button>
+      </div>
+      <p style="font-size:11px;color:var(--ink-3);margin-top:6px">点击后自动预填 ASIN 画像 · 业务目标已从本次对比分析带入</p>
+    </div>
+    <div class="qr-row" style="margin-top:8px">
+      <button class="qr" onclick="toast('演示原型：AI 已生成 A+ 对标话术 · 请在项目里查看')">📝 生成 A+ 对比话术</button>
+      <button class="qr ghost" onclick="toast('演示原型：3 个 ASIN 的评分维度对比已导出到 Excel')">⬇ 导出对比报告</button>
+    </div>`,1100);
+  showAmazonPreview();
+}
+
+function showAmazonPreview(){
+  $("pvTitle").textContent="Amazon 商品页 · 买家视角";
+  $("pvSub").textContent="3 个 ASIN 的当前实时详情页 · Prime / 评分 / Buy Box 与 amazon.com 同步";
+  const cards=CMP_ASINS.map(a=>`
+    <div class="amz-product ${a.own?"own":"comp"}">
+      <div class="amz-product-label">${a.own?"COMFEE · 自家":"Broan · 竞品"}</div>
+      <div class="amz-img">${a.img}
+        <div class="amz-badges">${a.prime?'<span class="amz-badge prime">prime</span>':""}${a.deal?'<span class="amz-badge deal">Lightning Deal</span>':""}</div>
+      </div>
+      <div class="amz-body">
+        <div class="amz-title">${esc(a.title)}</div>
+        <div class="amz-stars"><span class="stars">${starsHTML(a.stars)}</span><span class="score">${a.stars}</span><span class="rev">${a.reviews.toLocaleString()} ratings</span></div>
+        <div class="amz-price-line">${a.listPrice?`<span class="amz-list">List: $${a.listPrice.toFixed(2)}</span>`:""}${fmtAmzPrice(a.price)}</div>
+        ${a.listPrice?`<div class="amz-save">Save $${(a.listPrice-a.price).toFixed(2)} (${Math.round((1-a.price/a.listPrice)*100)}%)</div>`:""}
+        ${a.coupon?`<span class="amz-coupon">Save ${esc(a.coupon)} with Coupon</span>`:""}
+        <div class="amz-delivery"><b>FREE delivery</b> ${esc(a.delivery)}<br>Or fastest delivery <b>Tomorrow</b></div>
+        <div class="amz-buy">
+          <button class="amz-buy-btn cart">Add to Cart</button>
+          <button class="amz-buy-btn now">Buy Now</button>
+        </div>
+        <div class="amz-abt"><b>About this item</b><ul>${a.highlights.map(h=>`<li>${esc(h)}</li>`).join("")}</ul></div>
+        <div class="amz-meta">
+          <span>ASIN <b style="color:var(--ink-2)">${a.asin}</b></span>
+          <span class="meta-ai">AI-Ready ${a.aiScore} · Alexa ${a.alexa}%</span>
+        </div>
+      </div>
+      ${a.own?`<div style="padding:6px 10px;background:var(--q-purple-wash);border-top:1px solid #e5deff;text-align:center"><button class="qr primary" style="padding:5px 12px;font-size:11.5px;width:100%" onclick="startListingWithAsin('${a.asin}')">🚀 优化此 ASIN · 进入 Listing 流程</button></div>`:""}
+    </div>`).join("");
+  $("pvBody").innerHTML=`
+    <div class="amz-view">${cards}</div>
+    <div style="font-size:11.5px;color:var(--ink-2);margin-top:14px;padding:11px 13px;background:var(--q-purple-wash);border-radius:8px;line-height:1.75;border-left:3px solid var(--q-purple)">
+      <b style="color:var(--q-purple-dark)">💡 为什么两个视角要一起看</b><br>
+      左边卡片给你 <b>结论</b>（AI 已算好差距和建议），右边给你 <b>用户实际看到什么</b>（评分星星、Buy Box 按钮、主图差异）。<br>Listing 优化最容易踩的坑就是"数据好看但用户点不动"——两个视角对齐才能做对决策。
+    </div>`;
+  $("preview").classList.add("open");
+  $("preview").classList.add("wide");
+}
+
+/* =====================================================================
+   项目工作区
+===================================================================== */
+let curVer=3, extraCol=false;
+const selected=new Set();
+function enterProject(){go("project");renderTable();}
+
+function statusPill(s){
+  if(s==="live") return '<span class="status-pill-sm sp-live">✓ 全量上线</span>';
+  if(s==="ab") return '<span class="status-pill-sm sp-ab">● A/B 中</span>';
+  if(s==="draft") return '<span class="status-pill-sm sp-draft">草稿</span>';
+  if(s==="fail") return '<span class="status-pill-sm sp-fail">A/B 未通过</span>';
+  return "—";
+}
+
+function renderTable(){
+  const showV1=curVer===1;
+  const cols=`<th style="width:34px"><input type="checkbox" onclick="toggleAll(this)" aria-label="全选"></th>
+    <th>#</th><th class="stick-l">ASIN · 型号</th><th>品类</th><th>状态</th>
+    <th>AI-Ready</th><th>Alexa 命中率</th>
+    ${showV1?"":"<th>A/B CVR 提升</th><th>A/B CTR 提升</th>"}
+    <th>A9+语义</th><th>场景化</th><th>AI 可读</th><th>GEO</th><th>视觉</th><th>A+</th><th>TQS/KBYB</th><th>评论社交</th>
+    ${extraCol?"<th>Rufus Q&A 引用</th>":""}<th>风险</th>`;
+  const rows=ASINS.map((a,i)=>{
+    const score=showV1?Math.max(20,a.score-30):a.score;
+    const alexa=showV1?Math.max(5,a.alexa-25):a.alexa;
+    const cvrCell=a.ab?(a.ab.cvrDelta>=0?`<span class="ok-flag">+${a.ab.cvrDelta}%</span>`:`<span class="risk-flag">${a.ab.cvrDelta}%</span>`):"—";
+    const ctrCell=a.ab?(a.ab.ctrDelta>=0?`<span class="ok-flag">+${a.ab.ctrDelta}%</span>`:`<span class="risk-flag">${a.ab.ctrDelta}%</span>`):"—";
+    return `<tr class="gr-${a.grade}" onclick="openAsin(${a.id})">
+    <td onclick="event.stopPropagation()"><input type="checkbox" ${selected.has(a.id)?"checked":""} onchange="toggleSel(${a.id},this)" aria-label="选择 ${a.asin}"></td>
+    <td class="num">${i+1}</td>
+    <td class="stick-l"><span class="site-name">${a.asin}</span><span class="pi">${esc(a.model)}</span></td>
+    <td>${esc(a.cat)}</td>
+    <td>${statusPill(showV1?"draft":a.status)}</td>
+    <td><span class="score-bar"><span class="num" style="font-weight:600">${score}</span><span class="track"><span class="fill" style="width:${score}%"></span></span></span></td>
+    <td class="num">${alexa}%</td>
+    ${showV1?"":`<td>${cvrCell}</td><td>${ctrCell}</td>`}
+    <td class="num">${a.dims.a9}/20</td>
+    <td class="num">${a.dims.scenario}/15</td>
+    <td class="num">${a.dims.ai}/15</td>
+    <td class="num">${a.dims.geo}/15</td>
+    <td class="num">${a.dims.visual}/12</td>
+    <td class="num">${a.dims.aplus}/10</td>
+    <td class="num">${a.dims.tqs}/8</td>
+    <td class="num">${a.dims.social}/5</td>
+    ${extraCol?`<td class="num">${Math.max(0,Math.round(a.score/8))}</td>`:""}
+    <td>${a.risk?`<span class="risk-flag">⚠ ${esc(a.risk)}</span>`:"—"}</td>
+  </tr>`}).join("");
+  $("tblWrap").innerHTML=`<table class="sites"><thead><tr>${cols}</tr></thead><tbody>${rows}</tbody></table>
+  <p style="padding:9px 14px;font-size:11.5px;color:var(--ink-3)">展示 ${ASINS.length} 个 ASIN · 表格支持左右滑动查看所有维度 · 点击行查看单个 ASIN 的评分详情与 Before/After</p>`;
+}
+function toggleSel(id,cb){cb.checked?selected.add(id):selected.delete(id);$("selCount").textContent=selected.size;}
+function toggleAll(cb){
+  selected.clear();
+  if(cb.checked)ASINS.forEach(a=>selected.add(a.id));
+  $("selCount").textContent=selected.size;renderTable();
+  if(cb.checked)toast("已全选当前 12 个 ASIN");
+}
+function exportSel(){
+  const n=selected.size||ASINS.length;
+  toast(`已导出 ${n} 个 ASIN → COMFEE_RangeHood_Listing_V${curVer}.xlsx（含评分维度、A/B 结果、迭代日志）`);
+}
+function toggleVer(e){e.stopPropagation();$("verMenu").classList.toggle("open")}
+function switchVer(v){
+  curVer=v;$("verMenu").classList.remove("open");
+  $("verBtn").innerHTML=`📌 V${v}${v===3?"（当前 · A/B 后）":""} ▾`;
+  const txt={
+    3:`评估框架：<b>Modular Title 合规 ✓ · 8 维度加权评分 ✓ · A/B 显著性 p&lt;0.05 门槛 ✓</b>。加权：<b>A9+语义 20% · 场景化 15% · AI 可读 15% · GEO 15% · 视觉 12% · A+ 10% · TQS/KBYB 8% · 评论社交 5%</b>。<b>V3 变化：</b>6 个 SKU A/B 显著胜出，1 个未通过重回 Step 2；Broan 07-04 触发差异化迭代。`,
+    2:`<b>V2 · AI 生成（07-01 · A/B 前）。</b>Bedrock 首轮生成完成，全部通过 8 维评分阈值。此版本尚未开始 A/B，评分与 V3 完全一致但状态列全部为「A/B 中」。`,
+    1:`<b>V1 · 原始 Listing（06-01 · 优化前基线）。</b>全部 SKU 均为旧版单字段标题，超过 150 字符占比 92%，无场景化 Bullet、无 Q&A。品类 Alexa 命中率均值仅 12%。`,
+  }[v];
+  $("logicText").innerHTML=txt;
+  $("crumb").innerHTML=`我的项目 › <b>COMFEE 油烟机 · V${v}</b>`;
+  renderTable();
+  toast(v===3?"已切换到 V3（当前版本）":v===2?"已切换到 V2 · AI 生成后待测":"已切换到 V1 · 只读基线快照");
+}
+
+/* ASIN 详情弹窗 */
+function openAsin(id){
+  const a=ASINS.find(x=>x.id===id);
+  $("mSiteName").textContent=`${a.asin} · ${a.model}`;
+  $("mSiteSub").textContent=`${a.cat} · AI-Ready ${a.score}/100 · Alexa 命中率 ${a.alexa}% · ${a.status==="live"?"A/B 全量上线":a.status==="ab"?"A/B 测试中":a.status==="fail"?"A/B 未通过":"草稿"}`;
+  const before=a.before?`
+    <h4>Before / After 对比</h4>
+    <div class="ba-card">
+      <div class="ba-b">
+        <div class="ba-side before">
+          <div class="ba-tag">✗ BEFORE</div>
+          ${esc(a.before.name)}
+          <small>字符 ${a.before.chars} · Q&A ${a.before.qa} · Score ${a.before.score}/100</small>
+        </div>
+        <div class="ba-side after">
+          <div class="ba-tag">✓ AFTER</div>
+          <b>${esc(a.after.itemName)}</b><br><br>${esc(a.after.highlights)}
+          <small>Q&A ${a.after.qa} · Score ${a.score}/100</small>
+        </div>
+      </div>
+    </div>`:"";
+  const ab=a.ab?`
+    <h4>A/B 测试结果</h4>
+    <div class="cite-row"><span>CVR 提升</span><span class="v" style="color:${a.ab.cvrDelta>=0?"var(--a-fg)":"var(--risk)"}">${a.ab.cvrDelta>=0?"+":""}${a.ab.cvrDelta}%</span></div>
+    <div class="cite-row"><span>CTR 提升</span><span class="v" style="color:${a.ab.ctrDelta>=0?"var(--a-fg)":"var(--risk)"}">${a.ab.ctrDelta>=0?"+":""}${a.ab.ctrDelta}%</span></div>
+    <div class="cite-row"><span>Alexa 命中率提升</span><span class="v" style="color:${a.ab.alexaDelta>=0?"var(--a-fg)":"var(--risk)"}">${a.ab.alexaDelta>=0?"+":""}${a.ab.alexaDelta}%</span></div>`:"";
+  const abAction = a.status==="draft"||a.status==="fail"
+    ? `<button class="btn" onclick="closeModal('siteOverlay');startABForAsin('${a.asin}')">🧪 对该 ASIN 启动 A/B（14 天）</button>`
+    : a.status==="ab"
+    ? `<button class="btn sub" onclick="toast('演示原型：A/B 进度详情请在项目导出中查看')">🧪 查看 A/B 进度（Day 9 / 14）</button>`
+    : `<button class="btn sub" onclick="toast('演示原型：可在对话中说\\'把该 ASIN 再跑一轮 A/B\\'')">🧪 再跑一轮 A/B</button>`;
+  $("mSiteBody").innerHTML=`
+    <h4>为什么是 ${a.grade} 级</h4>
+    <p>${esc(a.why)}</p>
+    ${a.risk?`<p class="risk-li" style="color:var(--risk);margin-top:6px">⚠ 风险标注：${esc(a.risk)}</p>`:""}
+    <h4>8 维度评分（阈值 ≥80 进入项目 · A/B 可选）</h4>
+    ${scoreBreakdownHTML(a)}
+    ${before}${ab}
+    <h4>操作</h4>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${abAction}<button class="btn sub" onclick="toast('演示原型：可在对话中说\\'为什么该 ASIN 的 A+ 视觉分低\\'')">💬 在对话中追问</button></div>
+    <p style="margin-top:12px;font-size:12px;color:var(--ink-3)">Citation 监控与自动迭代对本 ASIN 已生效 · 数据每 24h 刷新。</p>`;
+  $("siteOverlay").classList.add("open");
+}
+function startABForAsin(asin){
+  toast(`已为 ${asin} 启动 A/B 测试 · 预计 07-22 结算 · 结果会推送到 Feeds`);
+  pushFeed("🧪 A/B 已启动",`${asin} · 目标每组 5,000 sessions · 14 天后自动判定`);
+}
+function openResearch(){$("resOverlay").classList.add("open")}
+function openEvidence(){
+  $("mSiteName").textContent="COMFEE 油烟机 · 项目决策快照";
+  $("mSiteSub").textContent="V3 版本决策依据 · 修改任意一项将触发重算并生成新版本";
+  $("mSiteBody").innerHTML=`
+    <h4>项目基本信息（07-01 确认）</h4>
+    <div class="cite-row"><span>品类</span><span class="v">Range Hood · 24/30/36 英寸 · 12 个 ASIN</span></div>
+    <div class="cite-row"><span>目标站点</span><span class="v">美国站 (US)</span></div>
+    <div class="cite-row"><span>核心业务目标</span><span class="v">Alexa "range hood for apartment" 场景 TOP 3</span></div>
+    <h4>场景集（7 条保留 / 0 条剔除）</h4>
+    ${SCENARIOS.map(s=>`<div class="cite-row"><span>${s.keep?"✓":"<span class='risk-flag'>✗</span>"} "${esc(s.q)}"</span><span class="src">频次 ${s.freq}%</span></div>`).join("")}
+    <h4>评估框架（8 维度 · 已固化）</h4>
+    <p style="font-size:12.5px">A9 关键词+语义 20% · 场景化 15% · AI 语义可读 15% · GEO 15% · 视觉 12% · A+ 10% · TQS/KBYB 合规 8% · 评论社交 5%</p>
+    <h4>A/B 测试策略</h4>
+    <p style="font-size:12.5px">Amazon Manage Your Experiments · 14 天 · 每组 ≥5,000 sessions · 显著性阈值 p&lt;0.05 · 未达标 SKU 自动回退 V1 并重回 Step 2。</p>
+    <p style="margin-top:10px;font-size:12px;color:var(--ink-3)">在对话中说「把评分权重的视觉提到 18%」或「保留 Follow-up 6 号（Alexa 语控）」即可基于此快照重算 V4。</p>`;
+  $("siteOverlay").classList.add("open");
+}
+
+/* =====================================================================
+   项目内对话
+===================================================================== */
+function wsScroll(){const s=$("wsChat");s.scrollTo({top:s.scrollHeight,behavior:"smooth"})}
+function wsMsg(role,html){
+  const d=document.createElement("div");
+  d.className="msg "+role;
+  d.innerHTML=`<div class="who">${role==="user"?"T":"AI"}</div><div class="bubble">${html}</div>`;
+  $("wsChat").appendChild(d);wsScroll();return d.querySelector(".bubble");
+}
+async function wsAi(html,delay=800){
+  const b=wsMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
+  await sleep(delay);b.innerHTML=html;wsScroll();return b;
+}
+function wsFreeSend(){
+  const v=$("wsInput").value.trim();if(!v)return;
+  $("wsInput").value="";wsMsg("user",esc(v));
+  wsAi(`这是可点击原型，自由问答未接入真实模型。点击上方提示卡片可体验：加列、竞品对比、上传日志、追问评分。`);
+}
+$("wsInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();wsFreeSend();}});
+
+async function wsAddColumn(){
+  wsMsg("user","表格加一列「Rufus Q&A 引用数」。");
+  extraCol=true;renderTable();
+  await wsAi(`✔ 已加入「Rufus Q&A 引用数」列，数据来自 Rufus Community Feedback API 近 30 天。B08GK4S8LK（36" Wall-Mount）以 <b class="num">11 条</b> 引用领先品类。<p style="margin-top:6px"><span class="src">Rufus Community Feedback</span></p>`);
+}
+async function wsStartAB(){
+  wsMsg("user","给 B08YXK3M2P 启动 A/B 测试。");
+  await wsAi(`目标 ASIN <b>B08YXK3M2P · COMFEE CVU30L2W</b>（当前 C 级 · 草稿状态）。A/B 计划：
+   <ul>
+    <li>实验对象：现有 Listing（A 组） vs 新生成的 Modular Title 版本（B 组）</li>
+    <li>周期：<b>14 天</b>，每组目标 <b>≥5,000 sessions</b></li>
+    <li>核心指标：CVR / CTR / Alexa 命中率 / 退货率</li>
+    <li>决策规则：p&lt;0.05 显著性 → B 组全量上线；未通过 → 回退并重回 Step 2</li>
+   </ul>
+   <div class="qr-row">
+     <button class="qr primary" onclick="wsAcceptStartAB()">✓ 确认，从今天启动</button>
+     <button class="qr ghost" onclick="wsMsg('user','算了先不做');wsAi('好的，可以在项目内的 ASIN 详情里随时再启动。')">先不做</button>
+   </div>`,900);
+}
+async function wsAcceptStartAB(){
+  wsMsg("user","确认，启动。");
+  await wsAi(`✔ B08YXK3M2P 的 A/B 已启动 · 结算日 <b>07-22</b>。状态列已同步更新为「A/B 中」，结果显著后自动进入项目正式版本；未通过会自动回退到当前 Listing。可以关闭这个对话，进度会通过 Feeds 推送。`);
+  pushFeed("🧪 A/B 已启动","B08YXK3M2P · CVU30L2W · 结算日 07-22 · CVR 显著提升自动上线");
+}
+
+/* 项目层 · 人工任务追踪（延续 Step 3 的清单，加入执行进度/结果） */
+const PROJ_TASKS=[
+ {asin:"B08GK4VPMR",model:"CVU30W4AST",type:"主图 · apartment 场景",   from:"Step 3 人工清单",owner:"设计 · 张明",assignedAt:"07-01",status:"in-progress",progress:"Day 2/3",impact:"视觉 7→10 · CVR +8%",note:""},
+ {asin:"B08GK4VPMR",model:"CVU30W4AST",type:"A+ 视频 · Install",       from:"Step 3 人工清单",owner:"内容 · 李华",assignedAt:"07-01",status:"in-progress",progress:"Day 2/5",impact:"A+ 8→10 · 退货 -32%",note:""},
+ {asin:"B08GK4VPMR",model:"CVU30W4AST",type:"Vine · 20 名额",           from:"Step 3 人工清单",owner:"品牌 · 王芳",assignedAt:"07-01",status:"submitted",progress:"Amazon 审核中",impact:"评论 +30 · 30 天见效",note:"预算已扣 $600"},
+ {asin:"B091DL8W7C",model:"EM144KM1",  type:"Highlights 合规改写",     from:"Dashboard 合规检测",owner:"Listing · 陈杰",assignedAt:"07-05",status:"in-progress",progress:"Day 1/2",impact:"合规风险清零",note:'Medical claim "sanitizing"'},
+ {asin:"B08GK4S8LK",model:"CVW36W6AST",type:"主图差异化 · open-plan",  from:"Step 3 人工清单",owner:"设计 · 张明",assignedAt:"06-28",status:"done",progress:"100%",impact:"相似度 62%→38% · 已重评 88",note:"已合入 V3 · 07-06"},
+ {asin:"B08GK4S8LK",model:"CVW36W6AST",type:"Vine · 20 名额",           from:"Step 3 人工清单",owner:"品牌 · 王芳",assignedAt:"06-28",status:"done",progress:"100%",impact:"+34 条评论 · 已到账",note:"评论 1,523→1,557"},
+];
+
+function openHumanTasks(){
+  const stMap={
+    "done":       {label:"✓ 已完成", cls:"sp-live", color:"var(--a-fg)"},
+    "in-progress":{label:"⏳ 进行中", cls:"sp-ab",   color:"var(--b-fg)"},
+    "submitted":  {label:"📤 已提交", cls:"sp-ab",   color:"var(--amz-blue)"},
+    "skipped":    {label:"– 已跳过", cls:"sp-draft",color:"var(--ink-3)"},
+  };
+  const cnt={total:PROJ_TASKS.length,done:0,active:0,skipped:0};
+  PROJ_TASKS.forEach(t=>{
+    if(t.status==="done")cnt.done++;
+    else if(t.status==="skipped")cnt.skipped++;
+    else cnt.active++;
+  });
+  const grouped={};
+  PROJ_TASKS.forEach(t=>{const k=t.asin+"__"+t.model;grouped[k]=grouped[k]||{asin:t.asin,model:t.model,tasks:[]};grouped[k].tasks.push(t);});
+  const groupHTML=Object.values(grouped).map(g=>{
+    const rows=g.tasks.map(t=>{
+      const st=stMap[t.status];
+      return `<tr>
+        <td style="font-size:12px"><b>${esc(t.type)}</b><br><span style="font-size:10.5px;color:var(--ink-3)">来自 · ${esc(t.from)}</span></td>
+        <td style="font-size:11.5px">${esc(t.owner)}</td>
+        <td style="font-size:11.5px;color:var(--ink-3)">${esc(t.assignedAt)}</td>
+        <td><span class="status-pill-sm ${st.cls}">${st.label}</span></td>
+        <td style="font-size:11.5px">${esc(t.progress)}</td>
+        <td style="font-size:11.5px;color:${st.color};font-weight:${t.status==="done"?"600":"400"}">${esc(t.impact)}${t.note?`<br><span style="font-size:10.5px;color:var(--ink-3);font-weight:400">${esc(t.note)}</span>`:""}</td>
+        <td style="width:60px;text-align:right">${t.status==="in-progress"||t.status==="submitted"?`<button class="qr ghost" style="padding:3px 8px;font-size:11px" onclick="toast('演示原型：已催办 ${esc(t.owner)}')">催办</button>`:""}</td>
+      </tr>`;
+    }).join("");
+    return `<div style="border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:10px;background:#fff">
+      <div style="background:#fafafa;padding:8px 12px;font-size:12px;font-weight:600;color:var(--amz-navy);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px">
+        <span>${g.asin}</span><span style="font-size:11px;color:var(--ink-3);font-weight:400">${esc(g.model)}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--ink-3);font-weight:400">${g.tasks.length} 项任务</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join("");
+  $("pvTitle").textContent="人工任务追踪 · 项目层";
+  $("pvSub").textContent="COMFEE 油烟机 V3 · 跨 ASIN · 与 AI Listing 流程双向关联";
+  $("pvBody").innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div class="kpi-card"><div class="kpi-l">📋 总数</div><div class="kpi-v">${cnt.total}</div><div class="kpi-d" style="color:var(--ink-3)">3 SKU 涉及</div></div>
+      <div class="kpi-card"><div class="kpi-l">⏳ 进行中</div><div class="kpi-v" style="color:var(--b-fg)">${cnt.active}</div><div class="kpi-d down">1 项延误</div></div>
+      <div class="kpi-card"><div class="kpi-l">✓ 已完成</div><div class="kpi-v" style="color:var(--a-fg)">${cnt.done}</div><div class="kpi-d up">已重评 · +3 分</div></div>
+      <div class="kpi-card"><div class="kpi-l">– 已跳过</div><div class="kpi-v" style="color:var(--ink-3)">${cnt.skipped}</div></div>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink-2);margin-bottom:8px">按 ASIN 分组 · 每条任务显示来源（Step 3 清单 / Dashboard 合规 / 自动迭代等）· 完成后自动触发重新评分</p>
+    ${groupHTML}
+    <div style="font-size:11.5px;color:var(--q-purple-dark);margin-top:10px;padding:11px 13px;background:var(--q-purple-wash);border-radius:8px;line-height:1.75;border-left:3px solid var(--q-purple)">
+      <b>📎 与 AI Listing 流程的双向关联：</b><br>
+      · <b>入口</b>：Step 3 AI 评分后的人工清单 · Dashboard 合规红线 · 自动迭代结构性改动 · 对话中主动新增<br>
+      · <b>出口</b>：完成后自动触发对应 ASIN 重新评分 · 结果通过 Feeds 推送 · 已完成任务的影响记入项目决策快照<br>
+      · <b>不阻塞</b>：Citation 监控与自动迭代并行运行 · 逾期 3 天自动催办 · 5 天上报到项目负责人
+    </div>
+    <div class="qr-row" style="margin-top:10px">
+      <button class="qr" onclick="toast('演示原型：已导出 · COMFEE_油烟机_人工任务_V3.xlsx')">⬇ 导出任务表</button>
+      <button class="qr" onclick="toast('演示原型：已批量催办 ${cnt.active} 项进行中/已提交任务')">🔔 批量催办 (${cnt.active})</button>
+      <button class="qr ghost" onclick="toast('演示原型：可在对话中说 \\'给 B08GK4VPMR 加一个 Q&A 视频任务\\'')">➕ 新增任务</button>
+    </div>`;
+  $("preview").classList.add("open");
+}
+
+function openIterLog(){
+  $("pvTitle").textContent="自动迭代日志 · 项目层持续能力";
+  $("pvSub").textContent="COMFEE 油烟机 V3 · 3 类触发器 · 关键改动进人工审核";
+  $("pvBody").innerHTML=`
+    <p style="font-size:12px;color:var(--ink-2);margin-bottom:10px">Bedrock AgentCore 监听 3 类触发器，命中即在项目层执行迭代。<b>结构性改动</b>（评分权重、评估框架）自动进入人工审核；<b>字段级改动</b>（Highlights、Q&A、Backend Keywords）直接上线。</p>
+    <div style="display:flex;gap:6px;font-size:11.5px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="border:1px solid var(--line);border-radius:6px;padding:3px 10px;background:var(--bg)">🆕 新 Follow-up</span>
+      <span style="border:1px solid var(--line);border-radius:6px;padding:3px 10px;background:var(--bg)">⚠ 退货率异常</span>
+      <span style="border:1px solid var(--line);border-radius:6px;padding:3px 10px;background:var(--bg)">📊 竞品变化</span>
+    </div>
+    <div class="iter-log">
+      <div class="iter-row head"><span>日期</span><span>触发器</span><span>执行动作</span><span>状态</span></div>
+      <div class="iter-row"><span>07-05</span><span>🆕 新 Follow-up：<i>"noise level at night?"</i></span><span>添加 "Night Mode 42dB" 到 Highlights</span><span class="st-tag sp-live">已上线</span></div>
+      <div class="iter-row"><span>07-08</span><span>🆕 新 Follow-up：<i>"pet-friendly"</i></span><span>Q&A 补充 "quiet enough for pets" 条目</span><span class="st-tag sp-live">已上线</span></div>
+      <div class="iter-row"><span>07-12</span><span>⚠ 退货率 +2.3%（安装问题）</span><span>强化 "20-Min Install" + 添加视频链接</span><span class="st-tag sp-live">已上线</span></div>
+      <div class="iter-row"><span>07-14</span><span>📊 竞品 COSMO 新 A+ 视频</span><span>建议增加 lifestyle 视频（结构性）</span><span class="st-tag sp-ab">人工审核</span></div>
+      <div class="iter-row"><span>07-18</span><span>📊 竞品 Broan 更新 AI 标题</span><span>差异化：添加 "No-Drill Option"</span><span class="st-tag sp-live">已上线</span></div>
+      <div class="iter-row"><span>07-22</span><span>🆕 新 Follow-up：<i>"washable filter"</i></span><span>Bullet 4 强化 "dishwasher-safe"</span><span class="st-tag sp-live">已上线</span></div>
+      <div class="iter-row"><span>07-25</span><span>📉 Listing Score 降至 78</span><span>Backend Keywords 补入长尾词</span><span class="st-tag sp-ab">审核中</span></div>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink-3);margin-top:10px">本月自动迭代 <b>7</b> 次 · 人工介入 <b>0</b> 次 · 结构性改动 <b>2</b> 项待审 · 系统可用率 99.8%</p>`;
+  $("preview").classList.add("open");
+}
+
+async function wsWhy(){
+  wsMsg("user","为什么 CVU30L2W 被列为 C 级？");
+  await wsAi(`<b>B08YXK3M2P · CVU30L2W（Legacy）</b> AI-Ready 58/100 为 C 级。三个短板：
+   <ul>
+    <li><b>场景化 8/15</b>：Bullet 缺 "apartment"、"quiet" 等场景词；</li>
+    <li><b>AI 可读 9/15</b>：Highlights 未生成，AI 无法解析卖点；</li>
+    <li><b>视觉 5/12</b>：主图 + 4 张，无 lifestyle 图，无视频。</li>
+   </ul>
+   <p>该 SKU 与 B08GK4VPMR（30" Slim）人群完全重叠，建议合并 SKU 而非继续优化。可以在对话中说「把 B08YXK3M2P 标记为下架候选」。</p>
+   <p><span class="src">AgentCore Evaluations</span><span class="src">主图分析</span></p>`,1100);
+}
+async function wsCompareCompetitor(){
+  wsMsg("user","与 Broan 品类头部做差异化对比。");
+  await wsAi(`调用 Broan 近 30 天 Alexa 引用样本 + Listing 快照，对比结果：
+   <div class="diff-card">
+     <div class="dc-h">COMFEE 30\" vs Broan 30\" · AI 生态差异</div>
+     <div class="dc-b">
+       <span class="diff-add">＋ 我们独占</span> "Apartment-Friendly"（Broan 未直接使用）· "20-Min DIY Install" 场景（Broan 强调专业安装）<br>
+       <span class="diff-del">－ 我们弱势</span> "Ultra-Quiet"（Broan 主打 47dB · 我们 52dB · 数字客观但话术偏弱）<br>
+       <span class="diff-del">－ 差距最大</span> Rufus Q&A 引用 · Broan 22 条 vs COMFEE 11 条（主要来自评论积累差距）
+     </div>
+     <div class="dc-risk"><b>⚠ 建议触发一次自动迭代：</b>在 Q&A 补充 "how does 52dB compare to a whisper?" 场景比较题，把客观数字翻译成用户可感知的场景，缩小与 Broan 话术差距。</div>
+   </div>
+   <div class="qr-row">
+     <button class="qr" onclick="wsAcceptCompete()">✓ 触发迭代（生成 V4）</button>
+     <button class="qr ghost" onclick="wsMeetingDoc()">📄 生成给品牌方的讨论稿</button>
+   </div>`,1300);
+}
+async function wsAcceptCompete(){
+  wsMsg("user","触发迭代生成 V4。");
+  await wsAi(`✔ 已提交 AgentCore Runtime，V4 将新增 3 条 Q&A（"whisper vs 52dB"、"noise vs Broan"、"night mode dB"），预计 45 分钟后完成并进入 A/B。项目里可跟踪状态。<i style="color:var(--ink-3)">（演示原型：表格仍显示 V3 数据）</i>`);
+  pushFeed("📋 V4 生成中","COMFEE 油烟机 · 竞品差异化迭代已提交 AgentCore。");
+}
+async function wsMeetingDoc(){
+  wsMsg("user","生成讨论稿。");
+  await wsAi(`✔ 已生成《COMFEE 油烟机 vs Broan · Listing 差异化建议》：差异清单 + AI 数据支撑 + 建议话术调整 + 预期效果，共 3 页。<div class="qr-row"><button class="qr" onclick="toast('演示原型：已模拟下载')">⬇ 下载 .docx</button></div>`);
+}
+async function wsSqv(){
+  wsMsg("user",`上传新一批 Alexa Follow-up 日志。<br><span class="file-chip">📄 COMFEE_RangeHood_Alexa_FollowUps_20260708.jsonl</span>`);
+  await wsAi(`已解析 <b>2,437 条</b> 新 Follow-up 日志，与现有场景集对比…`,800);
+  await sleep(1400);
+  pushFeed("🆕 新场景已发现","Alexa 日志出现新兴场景：\"is this pet-friendly\" 频次快速上升。");
+  await wsAi(`<b style="color:var(--amz-orange-dark)">🆕 发现新兴场景</b>：过去 7 天出现新 Follow-up <i>"is this pet-friendly (noise for cats/dogs)?"</i>，频次从 0 升至 3.2%，主要来自养宠家庭。
+   <p>该场景当前品类无强势品牌（Broan / COSMO / Zline 均未回答），如果在 Q&A 补充是 <b>可切入的空白</b>。</p>
+   <div class="qr-row">
+     <button class="qr" onclick="wsAcceptScenario()">✓ 触发迭代，补入 Q&A（生成 V4）</button>
+     <button class="qr ghost" onclick="wsIgnoreScenario()">暂不采纳，仅存档</button>
+   </div>`,900);
+}
+async function wsAcceptScenario(){
+  wsMsg("user","触发迭代补入。");
+  await wsAi(`✔ V4 迭代已提交，将补充 Q&A：<i>"Is this quiet enough for pets? Yes, at 52dB it's below the typical dog barking threshold..."</i>。上线后 30 天回收 Alexa 命中率变化。<i style="color:var(--ink-3)">（演示原型）</i>`);
+  pushFeed("📋 V4 生成中","COMFEE 油烟机 · 新兴场景「pet-friendly」迭代已提交。");
+}
+async function wsIgnoreScenario(){
+  wsMsg("user","暂不采纳。");
+  await wsAi(`好的，日志已存档到知识库（不影响当前 V3）。系统将持续监控该场景频次，达到 5% 会再次提示。`);
+}
+
+/* ===== 知识库 ===== */
+function renderKb(){
+  $("kbBody").innerHTML=KB_FILES.map(([n,c,p,t,on])=>`<tr>
+    <td>📄 ${esc(n)}</td><td><span class="kb-cat">${esc(c)}</span></td><td>${esc(p)}</td><td>${esc(t)}</td>
+    <td><button class="switch ${on?"on":""}" role="switch" aria-checked="${on}" aria-label="启用 ${esc(n)}" onclick="this.classList.toggle('on');toast(this.classList.contains('on')?'已启用：将参与推荐与问答':'已禁用：不再参与推荐与问答')"></button></td>
+  </tr>`).join("");
+}
+renderKb();
+showRecHistItem();
+
+/* =====================================================================
+   Dashboard · 运营总览（合规 + 广告 + 库存 三域打通）
+===================================================================== */
+
+/* 合规风险清单 · 覆盖 Amazon 4 类主要禁忌 */
+const COMPLIANCE=[
+ {asin:"B08GK4TT2Y",model:"CVI36W6AST",type:"Absolute claim",typeCls:"高",match:'"#1 professional-grade" in Highlights',advice:"改写为量化描述",st:"待处理",stCls:"risk-high"},
+ {asin:"B091DL8W7C",model:"EM144KM1",type:"Medical claim",typeCls:"高",match:'"sanitizing" in Bullet 3',advice:'改为 "reduces surface contact"',st:"待处理",stCls:"risk-high"},
+ {asin:"B08YXK3M2P",model:"CVU30L2W",type:"Restricted word",typeCls:"中",match:'"eco-friendly" 无 EPA 认证',advice:"移除或补充认证编号",st:"AI 已改写待审",stCls:"risk-fix"},
+ {asin:"B091DL5XPQ",model:"EM09RGN",type:"Trademark risk",typeCls:"中",match:'"instant-pot style" 影射他牌',advice:'替换为 "one-touch cooking"',st:"AI 已改写待审",stCls:"risk-fix"},
+];
+
+/* 广告词 × Listing 联动 · 30 天 SP+SB */
+const AD_WORDS=[
+ {kw:"apartment range hood",       spend:2340,cvr:8.2, cover:"✗ 未覆盖",  advice:"补入 Bullets + Backend",act:"iterate"},
+ {kw:"ductless range hood 30 inch",spend:1890,cvr:6.1, cover:"✓ 覆盖 · P.4",advice:"加大排名权重",         act:"boost"},
+ {kw:"range hood under 200",       spend:1220,cvr:5.4, cover:"✗ 未覆盖",  advice:"补入 Backend Keywords", act:"backend"},
+ {kw:"chef style range hood",      spend:980, cvr:3.2, cover:"✓ P.8 · CTR 低",advice:"Bullets 强化差异",  act:"iterate"},
+ {kw:"36 inch range hood black",   spend:860, cvr:7.5, cover:"✓ P.2",     advice:"—",                    act:null},
+];
+
+/* 库存 × Buy Box */
+const INVENTORY=[
+ {asin:"B08GK4VPMR",model:"CVU30W4AST",stock:480,daily:12,days:40,box:98,st:"健康",stCls:"ok"},
+ {asin:"B08GK4S8LK",model:"CVW36W6AST",stock:320,daily:8, days:40,box:95,st:"健康",stCls:"ok"},
+ {asin:"B091DK2H4W",model:"EM720CPL",  stock:560,daily:14,days:40,box:97,st:"健康",stCls:"ok"},
+ {asin:"B091DK9M2L",model:"EM110CAF",  stock:480,daily:12,days:40,box:96,st:"健康",stCls:"ok"},
+ {asin:"B08MHKJ7GH",model:"CVU30D2AST",stock:320,daily:9, days:36,box:94,st:"健康",stCls:"ok"},
+ {asin:"B08YWKF3XR",model:"CVU24W4AST",stock:210,daily:6, days:35,box:93,st:"健康",stCls:"ok"},
+ {asin:"B08GK4V38N",model:"CVU30C5AST",stock:180,daily:5, days:36,box:91,st:"健康",stCls:"ok"},
+ {asin:"B08GK4TT2Y",model:"CVI36W6AST",stock:150,daily:5, days:30,box:92,st:"健康",stCls:"ok"},
+ {asin:"B091DL5XPQ",model:"EM09RGN",   stock:88, daily:3, days:29,box:88,st:"待补货",stCls:"warn"},
+ {asin:"B091DL8W7C",model:"EM144KM1",  stock:92, daily:5, days:18,box:91,st:"补货中",stCls:"warn"},
+ {asin:"B08YXK3M2P",model:"CVU30L2W",  stock:41, daily:3, days:14,box:82,st:"补货中",stCls:"warn"},
+ {asin:"B091DK9M8X",model:"EM07L1",    stock:8,  daily:1, days:8, box:68,st:"缺货预警",stCls:"risk"},
+];
+
+/* AI 综合建议 · 跨合规+广告+库存+Citation 的智能推荐 */
+const INSIGHTS=[
+ {ic:"🚨",tag:"合规",tagCls:"compl",body:'<b>B08GK4TT2Y · CVI36W6AST</b> 的 Highlights 含 <i>"#1 professional-grade"</i>（AI 生成后未过审），预计 <b>7 天内触发 Amazon 政策审查</b>。',act:"立即改写",fn:"toast('演示原型：AI 已给出 3 个改写候选，1 键替换')"},
+ {ic:"💡",tag:"广告→Listing",tagCls:"ad",body:'搜索词 <span class="ad-word">"apartment range hood"</span> 30 天 SP 花费 <b>$2,340</b>，主 SKU Listing 无匹配关键词，估计 <b>漏损 CVR ≈ 31%</b>。补入即可回收广告转化。',act:"触发迭代",fn:"toast('演示原型：将该词加入 B08GK4VPMR 迭代队列 · 预计 4h 内完成')"},
+ {ic:"⚠",tag:"库存×A/B",tagCls:"inv",body:'<b>B08YXK3M2P · CVU30L2W</b> 库存仅 <b>14 天</b>，当前 A/B 跑到 Day 6 流量未达 target。<b>补货前继续 A/B 会污染统计结果</b>。',act:"暂停 A/B",fn:"toast('演示原型：A/B 已暂停 · 补货到位后自动恢复 · 已存档 Day 1-6 数据')"},
+ {ic:"�",tag:"Citation",tagCls:"perf",body:'品类 <b>AI Share of Voice</b> 首次从 Broan 手中夺过 <b>10pp</b>（12%→23%），主要来自新场景 <span class="ad-word">"pet-friendly quiet"</span> 独占。<b>建议加大广告投入</b> 巩固位置。',act:"生成广告建议",fn:"toast('演示原型：AI 已生成 Sponsored Prompts 建议 · 预算 $800/月')"},
+];
+
+/* Dashboard 品类/项目 scope */
+const DASH_SCOPES={
+ all:  {name:"全品类聚合",    sku:32, compl:88, complWarn:5, acos:19.2, acosDelta:-1.4, spend:31000,loss:8400, invGood:22, invAll:32, invRisk:3, box:91,  alexaHit:38, alexaDelta:26, sov:{"Broan":29,"COMFEE":21,"COSMO":19,"其他":31}, rufus:24, rufusHi:6, ext:42, extBrk:"Wirecutter 5 · Reddit 21 · YouTube 12 · 其他 4", trend:[10,14,22,29,33,38], sovNote:"跨品类聚合 · 当前 COMFEE 位居第 2 · 上季度第 3"},
+ range:{name:"COMFEE 油烟机 · V3", sku:12,compl:67, complWarn:4, acos:18.4, acosDelta:-2.3, spend:12800,loss:3600, invGood:8,  invAll:12, invRisk:2, box:89,  alexaHit:41, alexaDelta:29, sov:{"Broan":31,"COMFEE":23,"COSMO":18,"其他":28}, rufus:11, rufusHi:3, ext:18, extBrk:"Wirecutter 3 · Reddit 8 · YouTube 5 · 其他 2",   trend:[12,18,28,35,38,41], sovNote:"品类第 2 · 上月第 4 · 与 Broan 差距缩小 12pp"},
+ micro:{name:"COMFEE 微波炉 · V4", sku:20,compl:100,complWarn:0, acos:16.8, acosDelta:-0.9, spend:9200, loss:1800, invGood:18, invAll:20, invRisk:1, box:94,  alexaHit:39, alexaDelta:24, sov:{"Panasonic":26,"COMFEE":24,"Toshiba":18,"其他":32}, rufus:9, rufusHi:2, ext:14, extBrk:"Wirecutter 2 · Reddit 6 · YouTube 4 · 其他 2", trend:[15,19,25,31,36,39], sovNote:"品类第 2 · 与 Panasonic 差距仅 2pp"},
+ ac:   {name:"COMFEE 便携空调 · V2",sku:18,compl:78, complWarn:2, acos:24.6, acosDelta:1.8,  spend:8600, loss:2900, invGood:11, invAll:18, invRisk:4, box:83,  alexaHit:27, alexaDelta:15, sov:{"LG":34,"Whynter":22,"COMFEE":18,"其他":26}, rufus:6, rufusHi:1, ext:9, extBrk:"Reddit 4 · YouTube 3 · 其他 2",             trend:[8,12,16,20,24,27], sovNote:"品类第 3 · 与 LG 差距 16pp · 首轮 A/B 中"},
+};
+let curScope="all";
+
+function toggleDashScope(e){e.stopPropagation();$("dashScopeMenu").classList.toggle("open")}
+function setDashScope(key,btn){
+  curScope=key;
+  document.querySelectorAll("#dashScopeMenu button").forEach(b=>b.classList.remove("cur"));
+  if(btn)btn.classList.add("cur");
+  $("dashScopeMenu").classList.remove("open");
+  renderDashboard();
+  const s=DASH_SCOPES[key];
+  toast(`视图切换：${s.name}`);
+}
+function goDashFromProject(){
+  curScope="range";
+  go("dash",document.querySelector('.side-btn[data-nav="dash"]'));
+  renderDashboard();
+  toast("已跳转到运营总览 · 本品类视图");
+}
+document.addEventListener("click",e=>{if(!e.target.closest("#dashScope"))$("dashScopeMenu")&&$("dashScopeMenu").classList.remove("open");});
+
+function renderDashboard(){
+  const s=DASH_SCOPES[curScope];
+  const invGoodPct=Math.round(s.invGood/s.invAll*100);
+  const trendMax=Math.max(...s.trend);
+  const trendBars=s.trend.map(v=>`<span style="height:${Math.max(6,(v/trendMax)*100)}%"></span>`).join("");
+  const sovBars=Object.entries(s.sov).map(([brand,val])=>{
+    const isUs=brand==="COMFEE";
+    return `<div class="sov-row ${isUs?"us":""}"><span class="lbl">${esc(brand)}</span><span class="bar"><span style="width:${val*2}%"></span></span><span class="val">${val}%</span></div>`;
+  }).join("");
+  const scopeMenu=Object.entries(DASH_SCOPES).map(([k,v])=>`<button class="${k===curScope?"cur":""}" onclick="setDashScope('${k}',this)">${k==="all"?"🌐 ":k==="range"?"🎯 ":""}${esc(v.name)}${k===curScope?" · 当前":""}</button>`).join("");
+  const scopeSuffix=curScope==="range"?"（表格数据）":curScope==="all"?"（KPI + Citation 已聚合，深度表格以油烟机为例）":"（KPI + Citation 已切换，深度表格以油烟机为例）";
+  const c=COMPLIANCE.length;
+  const cHigh=COMPLIANCE.filter(x=>x.typeCls==="高").length;
+  const invBad=INVENTORY.filter(x=>x.stCls!=="ok").length;
+  const adSpend=AD_WORDS.reduce((s,w)=>s+w.spend,0);
+  const adLoss=AD_WORDS.filter(w=>w.cover.startsWith("✗")).reduce((s,w)=>s+w.spend,0);
+
+  const html=`
+    <div class="dash-page-h">
+      <h2>运营总览</h2>
+      <div class="scope-chip quick" id="dashScope">
+        <button onclick="toggleDashScope(event)">视图：<b>${esc(s.name)}</b> ▾</button>
+        <div class="scope-menu down quick" id="dashScopeMenu">${scopeMenu}</div>
+      </div>
+      <span style="font-size:11px;color:var(--ink-3)">${scopeSuffix}</span>
+      <span class="up-time">合规扫描 5min · 广告 15min · 库存 1h · Citation 2h 前</span>
+    </div>
+
+    <div class="dash-kpi k5">
+      <div class="kpi-card ${s.complWarn>2?"risk":s.complWarn>0?"warn":"ok"}"><div class="kpi-l">🛡️ 合规健康度</div>
+        <div class="kpi-v">${s.compl}%</div>
+        <div class="kpi-d ${s.complWarn>0?"down":"up"}">${s.complWarn?`${s.complWarn} 个 SKU 有风险`:"全部通过"} · TQS + 品牌禁忌词</div></div>
+      <div class="kpi-card ${s.acosDelta>0?"warn":"ok"}"><div class="kpi-l">📢 广告 ACOS</div>
+        <div class="kpi-v">${s.acos}%</div>
+        <div class="kpi-d ${s.acosDelta>0?"down":"up"}">${s.acosDelta>0?"▲ +":"▼ "}${s.acosDelta}pp · 30 天 $${(s.spend/1000).toFixed(1)}k · 漏损 $${(s.loss/1000).toFixed(1)}k</div></div>
+      <div class="kpi-card ${s.invRisk>2?"risk":s.invRisk>0?"warn":"ok"}"><div class="kpi-l">📦 库存健康</div>
+        <div class="kpi-v">${s.invGood}<span style="font-size:14px;color:var(--ink-3)">/${s.invAll}</span></div>
+        <div class="kpi-d ${s.invRisk>0?"down":"up"}">${s.invRisk} 个 SKU 库存 &lt; 21 天 · ${invGoodPct}% 健康</div></div>
+      <div class="kpi-card ${s.box>=90?"ok":"warn"}"><div class="kpi-l">🎯 Buy Box 占有</div>
+        <div class="kpi-v">${s.box}%</div>
+        <div class="kpi-d ${s.box>=90?"up":"down"}">品类均值 87%</div></div>
+      <div class="kpi-card ok"><div class="kpi-l">📡 Citation 命中率</div>
+        <div class="kpi-v">${s.alexaHit}%</div>
+        <div class="kpi-d up">▲ +${s.alexaDelta}pp vs 优化前 · Alexa Shopping</div></div>
+    </div>
+
+    <div class="dash-insights">
+      <h3><span class="pm">AI INSIGHTS</span> 跨域智能建议 · 基于合规 + 广告 + 库存三方数据</h3>
+      <div class="sub">这些建议单靠 Listing 数据看不出来 —— 需要把 Amazon Ads / SP-API 库存 / TQS 合规扫描接过来才能给出。</div>
+      ${INSIGHTS.map(i=>`
+        <div class="insight-item">
+          <div class="ins-ic">${i.ic}</div>
+          <div class="ins-body"><span class="ins-tag ${i.tagCls}">${i.tag}</span>${i.body}</div>
+          <button class="ins-act" onclick="${i.fn}">${i.act} →</button>
+        </div>`).join("")}
+    </div>
+
+    <div class="dash-panel quick">
+      <div class="dash-panel-h">📡 Citation 监控 · 项目层持续能力 <span class="cnt">Alexa API + Ads Citation Analysis + Web Scraping · 每 24h 刷新 · ${esc(s.name)}</span></div>
+      <div class="cite-grid">
+        <div class="cite-cell">
+          <div class="cite-l">Alexa 命中率 · 6 周走势</div>
+          <div style="display:flex;align-items:baseline;gap:10px"><span class="cite-v">${s.alexaHit}%</span><span class="cite-d up">▲ +${s.alexaDelta}pp vs 优化前</span></div>
+          <div class="mini-trend trend-up">${trendBars}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:4px">优化前 ${s.trend[0]}% → 现在 ${s.trend[s.trend.length-1]}%</div>
+        </div>
+        <div class="cite-cell">
+          <div class="cite-l">AI Share of Voice · 品类竞争</div>
+          <div class="sov-bars">${sovBars}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${esc(s.sovNote)}</div>
+        </div>
+        <div class="cite-cell">
+          <div class="cite-l">Rufus Q&A 引用 · 本月</div>
+          <div style="display:flex;align-items:baseline;gap:10px"><span class="cite-v">${s.rufus}</span><span style="font-size:11.5px;color:var(--ink-3)">条 · Rufus Community Feedback</span></div>
+          <div class="cite-d up" style="margin-top:5px">▲ <b>${s.rufusHi}</b> 条被 AI 摘要直接引用 · 触发"see more"展开</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:3px">高频短语：quiet · apartment · install · ductless · night mode</div>
+        </div>
+        <div class="cite-cell">
+          <div class="cite-l">外部 Citation · 本月</div>
+          <div style="display:flex;align-items:baseline;gap:10px"><span class="cite-v">${s.ext}</span><span style="font-size:11.5px;color:var(--ink-3)">篇 · 第三方 AI/媒体</span></div>
+          <div class="ext-list">${esc(s.extBrk)}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:3px">Wirecutter 类专业评测被 Rufus / Perplexity 优先引用</div>
+        </div>
+      </div>
+      <div style="padding:9px 14px;font-size:11.5px;color:var(--ink-3);border-top:1px solid var(--line);background:#fafafa">
+        📌 <b>项目层持续能力</b>：项目创建即启用 · 每 24h 增量刷新 · 数据用于触发自动迭代（新 Follow-up / SoV 下滑 / 竞品变化）
+      </div>
+    </div>
+
+    <div class="dash-2col">
+      <div class="dash-panel">
+        <div class="dash-panel-h">🛡️ 合规红线检测<span class="cnt">4 项风险 / 12 个 SKU · TQS 扫描 + 品牌禁忌词库</span></div>
+        <div class="dash-panel-b">
+          <table class="list-tbl">
+            <thead><tr><th>ASIN · 型号</th><th>风险类型</th><th>检出内容</th><th>严重度</th><th>状态</th></tr></thead>
+            <tbody>${COMPLIANCE.map(x=>`<tr>
+              <td><b>${x.asin}</b><br><span style="font-size:11px;color:var(--ink-3)">${esc(x.model)}</span></td>
+              <td>${esc(x.type)}</td>
+              <td style="font-size:11.5px;color:var(--ink-2)">${esc(x.match)}<br><span style="color:var(--ink-3);font-size:10.5px">→ ${esc(x.advice)}</span></td>
+              <td><span class="risk-pill ${x.typeCls==="高"?"risk-high":"risk-mid"}">${x.typeCls}</span></td>
+              <td><span class="risk-pill ${x.stCls}">${esc(x.st)}</span></td>
+            </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="dash-panel">
+        <div class="dash-panel-h">📢 广告词 × Listing 联动 <span class="cnt">30 天 · SP+SB · 花费 $${(adSpend/1000).toFixed(1)}k</span></div>
+        <div class="dash-panel-b">
+          <table class="list-tbl">
+            <thead><tr><th>搜索词</th><th>SP 花费</th><th>CVR</th><th>Listing 覆盖</th><th>建议</th></tr></thead>
+            <tbody>${AD_WORDS.map(w=>`<tr>
+              <td><span class="ad-word">${esc(w.kw)}</span></td>
+              <td class="num">$${w.spend.toLocaleString()}</td>
+              <td class="num">${w.cvr}%</td>
+              <td style="font-size:11.5px;color:${w.cover.startsWith("✗")?"var(--risk)":"var(--a-fg)"}">${esc(w.cover)}</td>
+              <td style="font-size:11.5px;color:var(--ink-2)">${w.act?`<button class="ins-act" style="padding:2px 8px;font-size:11px" onclick="toast('演示原型：${esc(w.advice)} · 已加入迭代队列')">${esc(w.advice)} →</button>`:esc(w.advice)}</td>
+            </tr>`).join("")}</tbody>
+          </table>
+          <div style="padding:9px 14px;font-size:11.5px;color:var(--ink-3);border-top:1px solid var(--line);background:#fafafa">
+            广告词漏损（未覆盖）合计 <b style="color:var(--risk)">$${(adLoss/1000).toFixed(1)}k</b> · 建议 <b>2</b> 个词补入 Backend Keywords / Bullets · <b>1</b> 个词加大 Listing 权重
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-panel">
+      <div class="dash-panel-h">📦 库存 · Buy Box 感知 <span class="cnt">SP-API 每小时刷新 · ${invBad} 个 SKU 需要关注</span></div>
+      <div class="dash-panel-b">
+        <table class="list-tbl">
+          <thead><tr><th>ASIN · 型号</th><th>在库</th><th>日均销售</th><th>库存天数</th><th>Buy Box</th><th>状态</th><th>与 Listing 优化的联动</th></tr></thead>
+          <tbody>${INVENTORY.map(x=>{
+            const daysPct=Math.min(100,(x.days/45)*100);
+            const barCls=x.days>=30?"ok":x.days>=15?"warn":"risk";
+            const stPill={ok:"risk-fix",warn:"risk-mid",risk:"risk-high"}[x.stCls];
+            const link = x.stCls==="ok" ? "—" : x.stCls==="warn"?"⚠ 补货前暂停 A/B · 保留 Listing":"🔴 缺货前不做 A/B · 优先补货";
+            return `<tr>
+              <td><b>${x.asin}</b><br><span style="font-size:11px;color:var(--ink-3)">${esc(x.model)}</span></td>
+              <td class="num">${x.stock}</td>
+              <td class="num">${x.daily}</td>
+              <td><span class="inv-bar"><span class="bar"><span class="fill ${barCls}" style="width:${daysPct}%"></span></span><span class="num" style="font-size:11.5px">${x.days} 天</span></span></td>
+              <td class="num">${x.box}%</td>
+              <td><span class="risk-pill ${stPill}">${esc(x.st)}</span></td>
+              <td style="font-size:11.5px;color:${x.stCls==="ok"?"var(--ink-3)":x.stCls==="warn"?"var(--b-fg)":"var(--risk)"}">${link}</td>
+            </tr>`}).join("")}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--ink-3);text-align:center;padding:8px 0">
+      数据源：Amazon Ads API · SP-API · TQS 合规扫描 · 品牌禁忌词库 · Alexa Shopping API · Bedrock AgentCore 关联分析
+    </div>`;
+  $("dashPage").innerHTML=html;
+}
+renderDashboard();
+</script>
+</body>
+</html>
