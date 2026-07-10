@@ -1,6 +1,6 @@
 # AI Listing 优化引擎 · 原型
 
-面向 Amazon 卖家运营团队的 AI Listing 优化平台原型，为美的集团 COMFEE 品牌定制。基于 Amazon Bedrock + Amazon Q 视觉语言，把 Listing 优化从"AI 生成文本"扩展到"跨广告/库存/合规/竞品的一体化运营驾驶舱"。
+面向 Amazon 卖家运营团队的 AI Listing 优化平台原型，为客户集团 COMFEE 品牌定制。基于 Amazon Bedrock + Amazon Q 视觉语言，把 Listing 优化从"AI 生成文本"扩展到"跨广告/库存/合规/竞品的一体化运营驾驶舱"。
 
 **在线访问**：https://tonyzhang55.github.io/AIListing/
 
@@ -34,7 +34,7 @@
 - 数据接入：SP-API · Amazon Ads API · Alexa Shopping API · Brand Registry/TQS
 - 存储：DynamoDB · S3
 - 异步：EventBridge + SQS + Lambda（多源抓取、A/B 结算、自动迭代触发）
-- 身份：Cognito（对接美的 SSO）
+- 身份：Cognito（对接客户 SSO）
 
 ## 本地打开
 
@@ -57,4 +57,4 @@ open index.html    # macOS
 
 ## License
 
-内部演示原型，仅供 AWS · 美的集团方案讨论使用。
+内部演示原型，仅供 AWS · 客户集团方案讨论使用。
