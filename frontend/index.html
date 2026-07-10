@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Listing 优化引擎 · 美的集团 · 原型</title>
+<title>AI Listing 优化引擎 · 客户 · 原型</title>
 <style>
 :root{
   /* 主色系：Amazon Quick 紫色（原变量名沿用，色值切换到紫色系，全平台自动生效）*/
@@ -651,6 +651,63 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
 .cite-row:last-child{border-bottom:none}
 .cite-row .v{font-weight:600;white-space:nowrap;color:var(--amz-navy)}
 
+/* ===== Provider 配置弹窗 · 模仿 SwiftChat 风格 ===== */
+.pv-modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:86vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(15,17,17,.25);animation:rise .25s ease both;position:relative}
+.pv-h{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px;background:#fafafa;position:sticky;top:0;z-index:2}
+.pv-h h3{font-size:16px;font-weight:700;color:var(--amz-navy)}
+.pv-h .sub{font-size:12px;color:var(--ink-3);margin-top:3px}
+.pv-tabs{display:flex;background:var(--bg);padding:4px;margin:14px 22px 0;border-radius:10px;position:sticky;top:69px;z-index:2}
+.pv-tab{flex:1;padding:8px 6px;text-align:center;font-size:12.5px;color:var(--ink-2);border-radius:8px;font-weight:500;cursor:pointer;transition:all .15s;position:relative}
+.pv-tab.on{background:#fff;color:var(--amz-navy);font-weight:700;box-shadow:0 1px 3px rgba(15,17,17,.08)}
+.pv-tab .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--a-fg);margin-left:5px;vertical-align:2px}
+.pv-body{padding:18px 22px}
+.pv-field{margin-bottom:12px}
+.pv-field label{display:block;font-size:11.5px;color:var(--ink-3);margin-bottom:4px;font-weight:500}
+.pv-field input,.pv-field select{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;background:#fff}
+.pv-field input:focus,.pv-field select:focus{outline:none;border-color:var(--q-purple)}
+.pv-field .with-eye{position:relative}
+.pv-field .with-eye input{padding-right:36px}
+.pv-field .with-eye .eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--ink-3);cursor:pointer;background:none;border:none;font-size:14px}
+.pv-status{margin-top:8px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
+.pv-status.show{display:block}
+.pv-status.ok{background:var(--a-bg);color:var(--a-fg);border:1px solid #a4d3a9}
+.pv-status.err{background:#fce8e0;color:var(--risk);border:1px solid #f0b4a0}
+.pv-models{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:6px;background:#fafafa}
+.pv-models .pm-h{font-size:11.5px;color:var(--ink-3);margin-bottom:5px;font-weight:600;letter-spacing:.03em}
+.pv-models .pm-list{display:flex;flex-wrap:wrap;gap:5px}
+.pv-models .pm-item{font-size:11px;background:#fff;border:1px solid var(--line);border-radius:5px;padding:2px 8px;color:var(--ink-2)}
+.pv-foot{padding:12px 22px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;background:#fafafa;position:sticky;bottom:0;z-index:2}
+
+/* ===== 模型选择 chip · 对话输入框旁 ===== */
+.model-chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--q-purple-dark);
+  background:var(--q-purple-wash);border:1px solid #d6c9f5;border-radius:20px;padding:4px 12px;
+  cursor:pointer;position:relative;font-weight:500;
+}
+.model-chip:hover{background:#eae0fc}
+.model-chip .brain{font-size:12px}
+.model-menu{
+  position:absolute;bottom:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);
+  border-radius:12px;box-shadow:0 8px 30px rgba(15,17,17,.15);min-width:280px;max-width:340px;
+  padding:8px;display:none;z-index:25;max-height:400px;overflow-y:auto;
+}
+.model-menu.open{display:block}
+.model-menu .mm-h{display:flex;align-items:center;justify-content:space-between;padding:6px 10px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.model-menu .mm-h b{font-size:13px;color:var(--amz-navy)}
+.model-menu .mm-h .x{cursor:pointer;color:var(--ink-3);width:22px;height:22px;display:grid;place-items:center;border-radius:5px}
+.model-menu .mm-h .x:hover{background:var(--bg)}
+.model-menu .mm-group{padding:4px 0}
+.model-menu .mm-group-h{font-size:10.5px;color:var(--ink-3);letter-spacing:.06em;padding:4px 10px 3px;text-transform:uppercase;font-weight:600}
+.model-menu .mm-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:12.5px;color:var(--ink);width:100%;text-align:left;border:none;background:none}
+.model-menu .mm-item:hover{background:var(--bg)}
+.model-menu .mm-item.cur{background:var(--q-purple-wash);color:var(--q-purple-dark);font-weight:600}
+.model-menu .mm-item .brain{width:22px;height:22px;border-radius:50%;background:var(--amz-navy);color:#fff;display:grid;place-items:center;font-size:11px;flex:none}
+.model-menu .mm-item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.model-menu .mm-item .check{color:var(--q-purple-dark);font-weight:700}
+.model-menu .mm-empty{padding:14px;text-align:center;font-size:11.5px;color:var(--ink-3);line-height:1.6}
+.model-menu .mm-config{display:block;text-align:center;color:var(--q-purple-dark);font-size:12px;padding:8px;border-top:1px solid var(--line);margin-top:6px;font-weight:600;cursor:pointer;background:none;border-left:none;border-right:none;border-bottom:none;width:100%}
+.model-menu .mm-config:hover{background:var(--q-purple-wash)}
+
 /* toast */
 .toast{
   position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(70px);
@@ -723,11 +780,12 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
   <div class="brand">
     <span class="brand-mark">aws</span>
     AI Listing 优化引擎
-    <span class="brand-sub">· 美的集团 · COMFEE 品类</span>
+    <span class="brand-sub">· 客户 · COMFEE 品类</span>
   </div>
   <span class="crumb" id="crumb">对话</span>
   <div class="topbar-right">
-    <span class="demo-tag">原型演示 · Mock 数据</span>
+    <span class="demo-tag" id="backendTag" title="后端连接状态 · 见 /api/health">🔵 检测后端…</span>
+    <button class="bell" id="modelSettingsBtn" onclick="openProviderModal()" aria-label="模型设置" title="配置大模型 API Key">⚙</button>
     <button class="bell" id="bellBtn" aria-label="消息通知">🔔<span class="badge" id="bellBadge" hidden>1</span></button>
     <div class="avatar">T</div>
   </div>
@@ -816,6 +874,10 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
         </div>
         <div class="composer">
           <div class="scope-row">
+            <div class="model-chip" id="modelChip" onclick="toggleModelMenu(event)">
+              <span class="brain">🧠</span>模型：<b id="modelChipName">未选择</b> ▾
+              <div class="model-menu" id="modelMenu"></div>
+            </div>
             <div class="scope-chip" id="scopeChip">
               <button onclick="toggleScope(event)">◎ 范围：<b id="scopeName">全部品类</b> ▾</button>
               <div class="scope-menu" id="scopeMenu">
@@ -834,7 +896,7 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
             <textarea id="homeInput" rows="1" placeholder="输入 ASIN 或直接说“帮我优化油烟机 Listing”…"></textarea>
             <button class="send-btn" onclick="freeSend()" aria-label="发送">➤</button>
           </div>
-          <p class="hint">Powered by Amazon Bedrock (Claude/Nova) + Alexa Shopping API · 运行在美的 AWS 账户内，数据不出境</p>
+          <p class="hint">Powered by Amazon Bedrock (Claude/Nova) + Alexa Shopping API · 运行在客户账户内，数据不出境</p>
         </div>
       </div>
 
@@ -1011,6 +1073,7 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
       <div class="page"><div class="page-inner">
         <h2>知识库</h2>
         <p class="sub">上传的产品资料、竞品 Listing、Alexa 日志、A/B 报告统一管理 · 逐个文件控制是否参与推荐与问答。</p>
+        <div id="kbSourceBar" style="font-size:11.5px;padding:8px 12px;background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:12px;color:var(--ink-3)"></div>
         <table class="list-tbl">
           <thead><tr><th>文件</th><th>类别</th><th>关联项目</th><th>上传时间</th><th>参与推荐</th></tr></thead>
           <tbody id="kbBody"></tbody>
@@ -1044,6 +1107,24 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
   </div>
 </div>
 
+<!-- Provider 配置弹窗 -->
+<div class="overlay" id="providerOverlay" onclick="if(event.target===this)closeModal('providerOverlay')">
+  <div class="pv-modal" role="dialog" aria-modal="true">
+    <div class="pv-h">
+      <div style="flex:1"><h3>大模型配置</h3><div class="sub">配置 API Key 后即可在下方对话中选用 · 支持 4 家 Provider</div></div>
+      <button class="x-btn" onclick="closeModal('providerOverlay')" aria-label="关闭">✕</button>
+    </div>
+    <div class="pv-tabs" id="pvTabs"></div>
+    <div class="pv-body" id="providerBody"></div>
+    <div class="pv-foot">
+      <button class="btn sub" id="pvTestBtn" onclick="testProvider()">🔌 测试连接</button>
+      <button class="btn sub" id="pvClearBtn" onclick="clearProvider()" style="color:var(--risk)">清除</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="saveProvider()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 研究弹窗 -->
 <div class="overlay" id="resOverlay" onclick="if(event.target===this)closeModal('resOverlay')">
   <div class="modal" role="dialog" aria-modal="true">
@@ -1068,8 +1149,62 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
 <div class="toast" id="toast"></div>
 
 <script>
+window.__APP_VERSION__ = 'v0.2.1-bedrock-5modes-2025-07-10T18';
+console.log('%c[AI Listing] ' + window.__APP_VERSION__, 'background:#7C3AED;color:#fff;padding:4px 10px;border-radius:4px;font-weight:bold');
+
 /* =====================================================================
-   Mock 数据
+   API 客户端 · 前后端交互
+   - 未连接后端时自动回退到下方内嵌 Mock（GitHub Pages 静态部署可用）
+   - 连接成功时优先用后端数据（含后端专属的 backend-only 文件等）
+===================================================================== */
+const api = {
+  base: '/api',
+  async health(){ const r = await fetch(this.base+'/health'); if(!r.ok) throw new Error('health '+r.status); return r.json(); },
+  async getKb(){ const r = await fetch(this.base+'/kb'); if(!r.ok) throw new Error('kb '+r.status); return (await r.json()).items; },
+  async getAsins(){ const r = await fetch(this.base+'/asins'); if(!r.ok) throw new Error('asins '+r.status); return (await r.json()).items; },
+  async getProjects(){ const r = await fetch(this.base+'/projects'); if(!r.ok) throw new Error('projects '+r.status); return (await r.json()).items; },
+  async getTasks(projectId){ const r = await fetch(this.base+'/projects/'+projectId+'/tasks'); if(!r.ok) throw new Error('tasks '+r.status); return (await r.json()).items; },
+  async chat(message, context){
+    const r = await fetch(this.base+'/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message, context }) });
+    const body = await r.json().catch(() => ({}));
+    if(!r.ok){
+      const detail = body.detail || body.error || '(no detail)';
+      throw new Error(`HTTP ${r.status} · ${detail}`);
+    }
+    return body;
+  },
+  // Provider 配置
+  async listProviders(){ const r = await fetch(this.base+'/providers'); return (await r.json()).providers; },
+  async getProviderConfig(){ const r = await fetch(this.base+'/providers/config'); return r.json(); },
+  async saveProviderConfig(pid, cfg){ const r = await fetch(this.base+'/providers/'+pid+'/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg) }); return r.json(); },
+  async deleteProviderConfig(pid){ const r = await fetch(this.base+'/providers/'+pid+'/config', { method:'DELETE' }); return r.json(); },
+  async testProvider(pid){ const r = await fetch(this.base+'/providers/'+pid+'/test', { method:'POST' }); return r.json(); },
+  async setActiveModel(provider, modelId, name){ const r = await fetch(this.base+'/providers/active-model', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, modelId, name }) }); return r.json(); },
+  async getProviderModels(pid){ const r = await fetch(this.base+'/providers/'+pid+'/models'); return r.json(); },
+};
+let backendConnected = false;
+async function checkBackend(){
+  const tag = document.getElementById('backendTag');
+  try {
+    const h = await api.health();
+    backendConnected = true;
+    if(tag){
+      tag.innerHTML = '🟢 后端已连接';
+      tag.style.color = 'var(--a-fg)';
+      tag.style.borderColor = '#a4d3a9';
+      tag.style.background = 'var(--a-bg)';
+      tag.title = `service: ${h.service} v${h.version} · ${new Date(h.ts).toLocaleTimeString()}`;
+    }
+    console.log('%c✓ Backend connected','color:#067d62;font-weight:bold', h);
+  } catch(e) {
+    backendConnected = false;
+    if(tag){ tag.innerHTML = '⚪ 离线 · 内嵌 mock'; tag.title = '后端未启动 · 运行 `npm start` 后刷新'; }
+    console.warn('Backend not reachable, using embedded mock:', e.message);
+  }
+}
+
+/* =====================================================================
+   Mock 数据（本地 fallback · 未连接后端时使用）
 ===================================================================== */
 /* AI-Ready 状态：live=A/B 全量  ab=A/B 测试中  draft=草稿  fail=A/B 未通过 */
 const ASINS = [
@@ -1298,13 +1433,65 @@ function restoreRecChat(){
   scrollHome();
   toast("已恢复历史对话");
 }
-function freeSend(){
+/* 极简 markdown → html · Claude/Nova 输出通常有 **粗体** · `code` · 段落 · 列表 */
+function mdToHtml(md){
+  let s = esc(md);
+  // 代码块 ```lang ... ```
+  s = s.replace(/```(\w+)?\n?([\s\S]+?)```/g, (m, lang, code) =>
+    `<pre style="background:#f7f7f8;padding:10px 12px;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.5;margin:6px 0;border:1px solid var(--line)">${code.trim()}</pre>`);
+  // 行内 code
+  s = s.replace(/`([^`\n]+)`/g, '<code style="background:#f0f0f2;padding:1px 6px;border-radius:3px;font-size:12px;font-family:Menlo,Consolas,monospace">$1</code>');
+  // **粗体**
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  // *斜体* / _斜体_
+  s = s.replace(/(?<![*\w])\*([^*\n]+)\*(?!\*)/g, '<i>$1</i>');
+  // 无序列表 · 每行以 - 或 * 开头
+  s = s.replace(/(^|\n)([-*] .+(?:\n[-*] .+)*)/g, (m, prefix, block) => {
+    const items = block.split(/\n/).map(l => `<li>${l.replace(/^[-*] /, '')}</li>`).join('');
+    return `${prefix}<ul style="padding-left:20px;margin:6px 0">${items}</ul>`;
+  });
+  // 有序列表
+  s = s.replace(/(^|\n)(\d+\. .+(?:\n\d+\. .+)*)/g, (m, prefix, block) => {
+    const items = block.split(/\n/).map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
+    return `${prefix}<ol style="padding-left:22px;margin:6px 0">${items}</ol>`;
+  });
+  // 剩余的换行
+  s = s.replace(/\n\n+/g, '</p><p style="margin-top:8px">');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+async function freeSend(){
   const v=$("homeInput").value.trim();if(!v)return;
   $("homeInput").value="";addMsg("user",esc(v));
   if(asinFieldIdx>=0){asinAnswer(v);return;}
-  aiSay(`这是可点击原型，自由问答未接入真实模型。可直接点击下方入口体验完整路径：
+  // 已联通模型 · 走真实调用
+  if (backendConnected && ACTIVE_MODEL) {
+    const bubble = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span>`);
+    try {
+      const r = await api.chat(v, { view: 'home', scope: $("scopeName")?.textContent || '' });
+      if (r.error) throw new Error(r.detail || r.error);
+      const html = mdToHtml(r.reply || '(空响应)');
+      const badge = r.mock
+        ? '<span style="font-size:10px;background:var(--b-bg);color:var(--b-fg);padding:1px 6px;border-radius:3px">MOCK</span>'
+        : '<span style="font-size:10px;background:var(--a-bg);color:var(--a-fg);padding:1px 6px;border-radius:3px">LIVE</span>';
+      const modelTag = r.model
+        ? `<div style="font-size:10.5px;color:var(--ink-3);margin-top:8px;padding-top:6px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:6px">${badge} 🧠 ${esc(r.model.name || r.model.modelId)}</div>`
+        : '';
+      bubble.innerHTML = html + modelTag;
+    } catch(e) {
+      bubble.innerHTML = `<span style="color:var(--risk)"><b>调用失败</b>：${esc(e.message)}</span>
+        <div style="font-size:11.5px;color:var(--ink-3);margin-top:6px">请检查 ⚙ 里的模型配置和 API Key 是否有效</div>
+        <div class="qr-row"><button class="qr" onclick="openProviderModal()">⚙ 检查配置</button></div>`;
+    }
+    scrollHome(); saveRecChat();
+    return;
+  }
+  // 未配置模型：给引导
+  aiSay(`还没配置大模型 · 自由问答需要先联通一个 Provider。点⚙ 选一个（推荐 Bedrock）保存后再试。
   <div class="qr-row">
-    <button class="qr" onclick="startListing()">🚀 开始 AI Listing 优化</button>
+    <button class="qr primary" onclick="openProviderModal()">⚙ 现在配置</button>
+    <button class="qr" onclick="startListing()">🚀 或先走一遍 AI Listing 优化</button>
     <button class="qr" onclick="askGeneral()">💡 看一个通用问答示例</button>
   </div>`);
 }
@@ -2186,10 +2373,33 @@ async function wsAi(html,delay=800){
   const b=wsMsg("ai",`<span class="typing"><i></i><i></i><i></i></span>`);
   await sleep(delay);b.innerHTML=html;wsScroll();return b;
 }
-function wsFreeSend(){
+async function wsFreeSend(){
   const v=$("wsInput").value.trim();if(!v)return;
   $("wsInput").value="";wsMsg("user",esc(v));
-  wsAi(`这是可点击原型，自由问答未接入真实模型。点击上方提示卡片可体验：加列、竞品对比、上传日志、追问评分。`);
+  if (backendConnected && ACTIVE_MODEL) {
+    const bubble = wsMsg("ai", `<span class="typing"><i></i><i></i><i></i></span>`);
+    try {
+      // 带上项目上下文 · 让模型知道当前在哪
+      const contextMsg = `[上下文] 你是 AI Listing 优化助手，用户当前在项目「COMFEE 油烟机 V3」（12 个 ASIN · 6 个已 A/B 全量 · Alexa 命中率 41%）· 请围绕 Listing 优化 / 广告 / 库存 / Citation 等场景回答。\n\n用户问题：${v}`;
+      const r = await api.chat(contextMsg, { view: 'project', project: 'range-hood-v3' });
+      if (r.error) throw new Error(r.detail || r.error);
+      const html = mdToHtml(r.reply || '(空响应)');
+      const badge = r.mock
+        ? '<span style="font-size:10px;background:var(--b-bg);color:var(--b-fg);padding:1px 6px;border-radius:3px">MOCK</span>'
+        : '<span style="font-size:10px;background:var(--a-bg);color:var(--a-fg);padding:1px 6px;border-radius:3px">LIVE</span>';
+      const modelTag = r.model
+        ? `<div style="font-size:10.5px;color:var(--ink-3);margin-top:8px;padding-top:6px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:6px">${badge} 🧠 ${esc(r.model.name || r.model.modelId)}</div>`
+        : '';
+      bubble.innerHTML = html + modelTag;
+    } catch(e) {
+      bubble.innerHTML = `<span style="color:var(--risk)"><b>调用失败</b>：${esc(e.message)}</span>
+        <div style="font-size:11.5px;color:var(--ink-3);margin-top:6px">请检查 ⚙ 里的模型配置</div>`;
+    }
+    wsScroll();
+    return;
+  }
+  wsAi(`还没配置大模型 · 点顶栏 ⚙ 联通 Bedrock（或其他）后再试。也可以直接点上方提示卡片体验原型脚本化路径：加列、竞品对比、上传日志、追问评分。
+  <div class="qr-row"><button class="qr primary" onclick="openProviderModal()">⚙ 现在配置</button></div>`);
 }
 $("wsInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();wsFreeSend();}});
 
@@ -2374,15 +2584,304 @@ async function wsIgnoreScenario(){
   await wsAi(`好的，日志已存档到知识库（不影响当前 V3）。系统将持续监控该场景频次，达到 5% 会再次提示。`);
 }
 
-/* ===== 知识库 ===== */
-function renderKb(){
-  $("kbBody").innerHTML=KB_FILES.map(([n,c,p,t,on])=>`<tr>
-    <td>📄 ${esc(n)}</td><td><span class="kb-cat">${esc(c)}</span></td><td>${esc(p)}</td><td>${esc(t)}</td>
-    <td><button class="switch ${on?"on":""}" role="switch" aria-checked="${on}" aria-label="启用 ${esc(n)}" onclick="this.classList.toggle('on');toast(this.classList.contains('on')?'已启用：将参与推荐与问答':'已禁用：不再参与推荐与问答')"></button></td>
+/* ===== 知识库 · 优先 API 拉取，失败回退到本地 mock ===== */
+async function renderKb(){
+  let items, src = 'local';
+  if (backendConnected) {
+    try {
+      const remote = await api.getKb();
+      items = remote;
+      src = 'backend';
+    } catch(e) { console.warn('KB API failed, using local mock', e.message); }
+  }
+  if (!items) items = KB_FILES.map(f => ({name:f[0], cat:f[1], project:f[2], uploadedAt:f[3], enabled:f[4], source:'local'}));
+  // 数据源指示条
+  const srcBar = $("kbSourceBar");
+  if (srcBar) {
+    srcBar.innerHTML = src==='backend'
+      ? `<span style="color:var(--a-fg);font-weight:600">🟢 数据源：后端 API</span> · GET /api/kb · ${items.length} 个文件`
+      : `<span style="color:var(--ink-3)">⚪ 数据源：内嵌 mock</span>（后端未启动）· ${items.length} 个文件`;
+  }
+  $("kbBody").innerHTML = items.map(f => `<tr>
+    <td>📄 ${esc(f.name)}${f.source==='backend-only'?' <span style="font-size:10px;color:var(--q-purple-dark);background:var(--q-purple-wash);padding:1px 6px;border-radius:3px;font-weight:600">API</span>':''}</td>
+    <td><span class="kb-cat">${esc(f.cat)}</span></td>
+    <td>${esc(f.project)}</td>
+    <td>${esc(f.uploadedAt)}</td>
+    <td><button class="switch ${f.enabled?"on":""}" role="switch" aria-checked="${f.enabled}" aria-label="启用 ${esc(f.name)}" onclick="this.classList.toggle('on');toast(this.classList.contains('on')?'已启用：将参与推荐与问答':'已禁用：不再参与推荐与问答')"></button></td>
   </tr>`).join("");
 }
-renderKb();
-showRecHistItem();
+
+/* =====================================================================
+   Provider 配置弹窗 + 模型选择器
+===================================================================== */
+let PROVIDER_DEFS = [];      // /api/providers 返回
+let PROVIDER_STATUS = {};    // 每个 provider 是否已配置
+let ACTIVE_MODEL = null;     // {provider, modelId, name}
+let curPvTab = 'bedrock';
+
+async function loadProviderState(){
+  if(!backendConnected) return;
+  try {
+    PROVIDER_DEFS = await api.listProviders();
+    const c = await api.getProviderConfig();
+    PROVIDER_STATUS = c.status || {};
+    ACTIVE_MODEL = c.activeModel || null;
+    // 每个已配置的 provider，异步拉真实模型列表覆盖硬编码
+    await Promise.all(PROVIDER_DEFS.map(async def => {
+      if (!PROVIDER_STATUS[def.id]?.configured) return;
+      try {
+        const r = await api.getProviderModels(def.id);
+        if (r.models && r.models.length) {
+          def.models = r.models;
+          def._modelSource = r.source;
+          console.log(`[Provider ${def.id}] 拉到 ${r.models.length} 个真实模型 · source: ${r.source}`);
+        }
+      } catch(e){ console.warn(`[Provider ${def.id}] 拉模型失败`, e.message); }
+    }));
+    updateModelChip();
+  } catch(e){ console.warn('Provider state load failed', e.message); }
+}
+
+function updateModelChip(){
+  const chip = $("modelChip");
+  const name = $("modelChipName");
+  if(!chip || !name) return;
+  if(ACTIVE_MODEL){
+    name.textContent = ACTIVE_MODEL.name || ACTIVE_MODEL.modelId;
+    chip.title = `${ACTIVE_MODEL.provider} · ${ACTIVE_MODEL.modelId}`;
+  } else {
+    name.textContent = "未选择";
+    chip.title = "点击选择模型（需先配置 API Key）";
+  }
+}
+
+async function openProviderModal(){
+  console.log('%c[Provider Modal] opening...','background:#7C3AED;color:#fff;padding:2px 6px;border-radius:3px');
+  if(!backendConnected){ toast("后端未连接 · 无法配置 Provider（运行 npm start 后刷新）"); return; }
+  await loadProviderState();
+  console.log('[Provider Modal] state loaded:', {
+    providerCount: PROVIDER_DEFS.length,
+    tabs: PROVIDER_DEFS.map(p=>p.id),
+    bedrockFields: PROVIDER_DEFS.find(p=>p.id==='bedrock')?.fields.map(f=>f.key),
+    status: PROVIDER_STATUS,
+    activeModel: ACTIVE_MODEL,
+  });
+  renderPvTabs();
+  renderPvBody();
+  const html = document.getElementById('providerBody').innerHTML;
+  console.log('[Provider Modal] providerBody html length:', html.length, '· preview:', html.slice(0, 200));
+  $("providerOverlay").classList.add("open");
+}
+function renderPvTabs(){
+  $("pvTabs").innerHTML = PROVIDER_DEFS.map(p => {
+    const configured = PROVIDER_STATUS[p.id]?.configured;
+    return `<div class="pv-tab ${p.id===curPvTab?"on":""}" onclick="switchPvTab('${p.id}')">${esc(p.name)}${configured?'<span class="dot" title="已配置"></span>':""}</div>`;
+  }).join("");
+}
+function switchPvTab(id){ curPvTab = id; renderPvTabs(); renderPvBody(); }
+
+function renderPvBody(){
+  try { return _renderPvBodyImpl(); }
+  catch(e){
+    console.error('renderPvBody failed:', e);
+    $("providerBody").innerHTML = `<div style="color:var(--risk);padding:14px;background:#fce8e0;border-radius:8px;font-size:12px;line-height:1.6">
+      <b>🐞 渲染报错</b><br>
+      ${esc(e.message)}<br>
+      <small style="opacity:.75;font-family:monospace;white-space:pre-wrap;display:block;margin-top:8px">${esc((e.stack||'').split('\n').slice(0,5).join('\n'))}</small>
+      <hr style="margin:10px 0;border:none;border-top:1px solid #f0b4a0">
+      <small>PROVIDER_DEFS: ${PROVIDER_DEFS.length} 项 · curPvTab: ${esc(curPvTab)}<br>
+      backendConnected: ${backendConnected} · 后端 URL: /api/providers</small>
+    </div>`;
+  }
+}
+function _renderPvBodyImpl(){
+  const def = PROVIDER_DEFS.find(p => p.id === curPvTab);
+  if(!def){ $("providerBody").innerHTML = `<p style='color:var(--ink-3);padding:12px'>Provider "${esc(curPvTab)}" 未找到 · PROVIDER_DEFS 长度=${PROVIDER_DEFS.length}</p>`; return; }
+  const status = PROVIDER_STATUS[def.id] || { configured:false, config:null };
+  // 当前 credMode（只有 bedrock 有）· 决定其他字段是否显示
+  const curCredMode = (def.id === 'bedrock')
+    ? (document.getElementById('pvf_credMode')?.value || status.config?.credMode || def.fields.find(f=>f.key==='credMode').default)
+    : null;
+  const fieldVisible = f => {
+    if (!f.dependsOn) return true;
+    for (const [k,v] of Object.entries(f.dependsOn)) {
+      if (k === 'credMode' && curCredMode !== v) return false;
+    }
+    return true;
+  };
+  const fields = def.fields.filter(fieldVisible).map(f => {
+    const existing = status.config?.[f.key] || "";
+    const placeholder = existing ? `当前：${existing}（重新输入以覆盖）` : (f.placeholder || f.default || "");
+    if(f.type === 'select'){
+      // 优先读 DOM 当前值（保持用户刚选的），其次 existing / default
+      const domValue = document.getElementById('pvf_' + f.key)?.value;
+      const cur = (f.key === 'credMode' ? curCredMode : (domValue || existing || f.default));
+      const opts = f.options.map(o => {
+        const label = f.optionLabels?.[o] || o;
+        return `<option value="${esc(o)}" ${o===cur?"selected":""}>${esc(label)}</option>`;
+      }).join("");
+      const onChange = f.key === 'credMode' ? 'onchange="renderPvBody()"' : '';
+      return `<div class="pv-field"><label>${esc(f.label)}</label><select id="pvf_${f.key}" ${onChange}>${opts}</select></div>`;
+    }
+    if(f.type === 'password'){
+      const savedNote = existing
+        ? `<div style="font-size:11px;color:var(--a-fg);margin-bottom:4px;display:flex;align-items:center;gap:6px">
+             <span>✓ 已保存</span>
+             <code style="background:var(--a-bg);padding:1px 6px;border-radius:3px;font-size:11px">${esc(existing)}</code>
+             <span style="color:var(--ink-3);font-weight:400">· 只显示脱敏值 · 留空保存则保持不变</span>
+           </div>`
+        : '';
+      const pwdPlaceholder = existing ? '留空保存则保持不变，或输入新值覆盖' : (f.placeholder || '');
+      return `<div class="pv-field"><label>${esc(f.label)}</label>${savedNote}<div class="with-eye">
+        <input type="password" id="pvf_${f.key}" placeholder="${esc(pwdPlaceholder)}">
+        <button class="eye" onclick="togglePwd('pvf_${f.key}',this)">👁</button>
+      </div></div>`;
+    }
+    // 普通 text · 如果有 existing 就直接填进去（URL/profile 等非敏感字段展示明文更方便修改）
+    return `<div class="pv-field"><label>${esc(f.label)}</label>
+      <input type="text" id="pvf_${f.key}" value="${escAttr(existing)}" placeholder="${escAttr(f.default||'')}"></div>`;
+  }).join("");
+  // Bedrock 额外提示
+  const bedrockNote = def.id === 'bedrock' ? `
+    <div style="font-size:11.5px;color:var(--ink-2);background:var(--q-purple-wash);border-left:3px solid var(--q-purple);border-radius:6px;padding:8px 11px;margin-bottom:12px;line-height:1.6">
+      <b style="color:var(--q-purple-dark)">💡 AWS 员工推荐用「默认凭证链」</b> · 走本地 SSO / Ada / EC2 Role，无需输 Key。<br>
+      模型列表以 <code style="background:#fff;padding:1px 5px;border-radius:3px">us.</code> 开头的走 Cross-Region Inference Profile（Claude 4/4.5 系列必需）。<br>
+      调用统一走 Converse API · Claude / Nova / Llama / DeepSeek 一套代码。
+    </div>` : '';
+  const models = `<div class="pv-models">
+    <div class="pm-h">可用模型（${def.models.length}）</div>
+    <div class="pm-list">${def.models.map(m => `<span class="pm-item" title="${escAttr(m.id)}">${esc(m.name)}${m.cris?' <span style="color:var(--q-purple-dark);font-weight:700">·CRIS</span>':''}</span>`).join("")}</div>
+  </div>`;
+  const statusInfo = status.configured
+    ? `<p style="font-size:12px;color:var(--a-fg);margin-bottom:12px">✓ 已配置 · 修改任意字段后点保存覆盖 · 或点清除移除</p>`
+    : `<p style="font-size:12px;color:var(--ink-3);margin-bottom:12px">尚未配置 · 输入下方字段后点保存</p>`;
+  $("providerBody").innerHTML = bedrockNote + statusInfo + fields + models + `<div class="pv-status" id="pvStatus"></div>`;
+  $("pvClearBtn").style.display = status.configured ? "inline-flex" : "none";
+}
+function togglePwd(id, btn){
+  const el = document.getElementById(id);
+  if(el.type === 'password'){ el.type='text'; btn.textContent='🙈'; } else { el.type='password'; btn.textContent='👁'; }
+}
+function collectPvFields(){
+  const def = PROVIDER_DEFS.find(p => p.id === curPvTab);
+  const out = {};
+  def.fields.forEach(f => { const el = document.getElementById('pvf_'+f.key); if(el && el.value) out[f.key] = el.value; });
+  return out;
+}
+function showPvStatus(kind, msg){
+  const el = $("pvStatus");
+  el.className = "pv-status show " + (kind==='ok'?'ok':'err');
+  el.innerHTML = msg;
+}
+async function saveProvider(){
+  const cfg = collectPvFields();
+  const def = PROVIDER_DEFS.find(p => p.id === curPvTab);
+  // 检查必填字段（考虑 dependsOn：只检查当前 credMode 下应出现的字段）
+  const curMode = cfg.credMode || PROVIDER_STATUS[def.id]?.config?.credMode || def.fields.find(f=>f.key==='credMode')?.default;
+  const isActive = f => {
+    if (!f.dependsOn) return true;
+    return Object.entries(f.dependsOn).every(([k,v]) => (k==='credMode' ? curMode===v : true));
+  };
+  const missing = def.fields.filter(f => f.required && isActive(f) && !cfg[f.key] && !PROVIDER_STATUS[def.id]?.config?.[f.key]);
+  if(missing.length){ showPvStatus('err', `缺少必填字段：${missing.map(f=>f.label).join(', ')}`); return; }
+  try {
+    const r = await api.saveProviderConfig(curPvTab, cfg);
+    if(!r.ok) throw new Error(r.error || 'save failed');
+    showPvStatus('ok', `✓ 已保存 ${esc(def.name)} 配置 · 敏感字段（API Key 等）已加密存到 <code style="background:var(--a-bg);padding:1px 5px;border-radius:3px">backend/config.json</code>，只显示脱敏值。后续改 URL/Region 时密码字段留空即可，不会清除。可点「测试连接」验证，或关闭弹窗去选模型。`);
+    toast(`✓ 已保存 ${def.name} 配置`);
+    await loadProviderState();
+    renderPvTabs();
+    renderPvBody();
+  } catch(e){ showPvStatus('err', '保存失败：' + esc(e.message)); }
+}
+async function testProvider(){
+  const status = PROVIDER_STATUS[curPvTab];
+  if(!status?.configured){ showPvStatus('err', '请先保存配置再测试'); return; }
+  showPvStatus('ok', '🔌 测试中…');
+  try {
+    const r = await fetch('/api/providers/'+curPvTab+'/test', { method:'POST' });
+    const data = await r.json();
+    if(!data.ok){
+      const hintPart = data.hint ? `<br><span style="opacity:.85">${esc(data.hint)}</span>` : '';
+      showPvStatus('err', '连接失败：' + esc(data.error||'unknown') + hintPart);
+      return;
+    }
+    const result = data.result || {};
+    let info = '';
+    if (result.modelCount !== undefined) {
+      info = `远程可见 <b>${result.modelCount}</b> 个模型`;
+      if (result.breakdown) info += ` · Anthropic ${result.breakdown.anthropic} · Amazon ${result.breakdown.amazon} · 其他 ${result.breakdown.other}`;
+      else if (result.sample?.length) info += ` · 示例：${result.sample.join(', ')}`;
+      if (result.region) info += ` · Region ${result.region}`;
+    } else {
+      info = result.note || '连接正常';
+    }
+    showPvStatus('ok', `✓ 连接成功 · ${info}`);
+  } catch(e){ showPvStatus('err', '连接失败：' + esc(e.message)); }
+}
+async function clearProvider(){
+  if(!confirm(`确定清除 ${PROVIDER_DEFS.find(p=>p.id===curPvTab)?.name} 的配置吗？`)) return;
+  await api.deleteProviderConfig(curPvTab);
+  await loadProviderState();
+  renderPvTabs();
+  renderPvBody();
+  toast("已清除");
+}
+
+/* 模型选择器 · 输入框旁 chip */
+function toggleModelMenu(e){
+  e.stopPropagation();
+  if(!backendConnected){ toast("后端未连接 · 无法选择模型"); return; }
+  const menu = $("modelMenu");
+  if(menu.classList.contains("open")){ menu.classList.remove("open"); return; }
+  renderModelMenu();
+  menu.classList.add("open");
+}
+function renderModelMenu(){
+  if(!PROVIDER_DEFS.length){ $("modelMenu").innerHTML = '<div class="mm-empty">加载中…</div>'; return; }
+  const configuredProviders = PROVIDER_DEFS.filter(p => PROVIDER_STATUS[p.id]?.configured);
+  const groups = configuredProviders.map(p => {
+    const items = p.models.map(m => {
+      const isCur = ACTIVE_MODEL && ACTIVE_MODEL.provider===p.id && ACTIVE_MODEL.modelId===m.id;
+      return `<button class="mm-item ${isCur?"cur":""}" onclick="pickModel('${p.id}','${escAttr(m.id)}')">
+        <span class="brain">🧠</span><span class="name">${esc(m.name)}</span>${isCur?'<span class="check">✓</span>':""}
+      </button>`;
+    }).join("");
+    return `<div class="mm-group"><div class="mm-group-h">${esc(p.name)}</div>${items}</div>`;
+  }).join("");
+  const empty = configuredProviders.length===0
+    ? `<div class="mm-empty">还没有配置任何 Provider<br>点下方"配置 API Key"添加</div>`
+    : "";
+  $("modelMenu").innerHTML = `
+    <div class="mm-h"><b>Select Model</b><span class="x" onclick="event.stopPropagation();$('modelMenu').classList.remove('open')">✕</span></div>
+    ${empty}${groups}
+    <button class="mm-config" onclick="event.stopPropagation();$('modelMenu').classList.remove('open');openProviderModal()">⚙ 配置 API Key</button>
+  `;
+}
+async function pickModel(provider, modelId){
+  try {
+    // 从 PROVIDER_DEFS 找 name（可能是从真实列表来的）
+    const def = PROVIDER_DEFS.find(p => p.id === provider);
+    const model = def?.models.find(m => m.id === modelId);
+    const r = await api.setActiveModel(provider, modelId, model?.name);
+    if(r.error) throw new Error(r.error);
+    ACTIVE_MODEL = r.activeModel;
+    updateModelChip();
+    $("modelMenu").classList.remove("open");
+    toast(`已切换模型 · ${ACTIVE_MODEL.name}`);
+  } catch(e){ toast("切换失败：" + e.message); }
+}
+document.addEventListener("click", e => {
+  if(!e.target.closest("#modelChip")) $("modelMenu")?.classList.remove("open");
+});
+
+/* 启动顺序：先探后端，再渲染 KB + 加载 Provider 状态 */
+(async () => {
+  await checkBackend();
+  await renderKb();
+  await loadProviderState();
+  showRecHistItem();
+})();
 
 /* =====================================================================
    Dashboard · 运营总览（合规 + 广告 + 库存 三域打通）

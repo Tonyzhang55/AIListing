@@ -1,0 +1,20 @@
+{
+  "name": "ai-listing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Listing 优化引擎 · 前后端分离原型",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock": "^3.1084.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1084.0",
+    "@aws-sdk/credential-providers": "^3.1084.0",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

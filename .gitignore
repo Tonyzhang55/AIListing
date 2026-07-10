@@ -2,6 +2,10 @@
 .vscode/
 .idea/
 node_modules/
+package-lock.json
 *.log
 *.swp
 Thumbs.db
+.env
+.env.local
+backend/config.json
