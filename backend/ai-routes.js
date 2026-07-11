@@ -279,6 +279,8 @@ router.post('/asin-lookup', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
+        // 强制 US 站点 · 避免被 IP 地理位置重定向到 amazon.co.jp
+        'Cookie': 'i18n-prefs=USD; lc-main=en_US; sp-cdn="L5Z9:CN"',
       },
     });
     if (!r.ok) throw new Error(`Amazon 返回 HTTP ${r.status}（该 ASIN 可能不存在或不在此站点售卖）`);
@@ -289,10 +291,55 @@ router.post('/asin-lookup', async (req, res) => {
     const title = pick(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/i);
     const brand = pick(/<tr class="po-brand"[\s\S]{0,300}?<span[^>]*class="[^"]*po-break-word[^"]*"[^>]*>\s*([^<]+?)\s*<\/span>/i)
                || pick(/<a id="bylineInfo"[^>]*>\s*(?:Visit the |Brand:\s*)?([^<]+?)(?:\s+Store)?\s*<\/a>/i);
-    const priceRaw = pick(/<span class="a-price[^"]*"[^>]*>\s*<span class="a-offscreen">([^<]+)<\/span>/i);
+    // 价格 · 优先从 buy box 抓 · 避免抓到 "customers also viewed" 里的其他币种价格
+    const buyBox = html.match(/id="corePriceDisplay_desktop_feature_div"[\s\S]{0,3000}/i)?.[0]
+                || html.match(/id="apex_desktop"[\s\S]{0,3000}/i)?.[0]
+                || html.match(/id="corePrice_feature_div"[\s\S]{0,3000}/i)?.[0]
+                || '';
+    const priceRaw = (buyBox.match(/<span class="a-offscreen">\s*(\$[\d.,]+)\s*<\/span>/i)?.[1]
+                   || pick(/<span class="a-price[^"]*"[^>]*>\s*<span class="a-offscreen">\s*(\$[\d.,]+)\s*<\/span>/i)
+                   || '').replace(/\s+/g, ' ').trim();
     const featureBullets = [...html.matchAll(/<span class="a-list-item[^"]*"[^>]*>\s*([^<]{20,300}?)\s*<\/span>/gi)].slice(0, 5).map(m => m[1].trim());
     const bcHtml = html.match(/id="wayfinding-breadcrumbs_feature_div"[\s\S]{0,3000}?<\/ul>/i)?.[0] || '';
     const breadcrumb = [...bcHtml.matchAll(/<a[^>]*class="[^"]*a-link-normal[^"]*"[^>]*>\s*([^<]+?)\s*<\/a>/g)].map(m => m[1].trim());
+
+    // ---- 新增：图片 / 评分 / 评论数 / Prime / 优惠 / 送达时间 ----
+    // 主图 · Amazon 用 data-a-dynamic-image JSON 或 hi-res 属性
+    let imageUrl = pick(/<img[^>]+id="landingImage"[^>]+data-old-hires="([^"]+)"/i)
+                || pick(/<img[^>]+id="landingImage"[^>]+src="([^"]+)"/i)
+                || pick(/"hiRes":"([^"]+\.jpg)"/i)
+                || pick(/"large":"([^"]+\.jpg)"/i);
+    if (imageUrl) imageUrl = imageUrl.replace(/&amp;/g, '&');
+
+    // 评分 · "4.5 out of 5 stars"
+    const starsRaw = pick(/<span[^>]+class="a-icon-alt"[^>]*>\s*([\d.]+)\s+out of\s+5 stars?/i)
+                  || pick(/data-hook="rating-out-of-text"[^>]*>\s*([\d.]+)/i);
+    const stars = starsRaw ? parseFloat(starsRaw) : null;
+
+    // 评论数 · "2,847 ratings" 或 "2,847 global ratings"
+    const reviewsRaw = pick(/id="acrCustomerReviewText"[^>]*>\s*([\d,]+)\s+ratings?/i)
+                    || pick(/data-hook="total-review-count"[^>]*>[\s\S]*?([\d,]+)\s+global ratings/i);
+    const reviews = reviewsRaw ? parseInt(reviewsRaw.replace(/,/g, ''), 10) : null;
+
+    // Prime · 检测 prime 徽标存在（多种页面结构：icon / json / badge）
+    const prime = /class="[^"]*a-icon-prime[^"]*"|"isPrimeEligible"\s*:\s*true|"isEligibleForPrime"\s*:\s*true|primeBadgeVisible|badge_feature_slot[^"]*>\s*<[^>]*prime|id="primeSupplement/i.test(html);
+
+    // Deal / Lightning Deal 徽标
+    const deal = /Lightning Deal|Limited time deal|Deal of the Day/i.test(html);
+
+    // Coupon · "Save $X with coupon" / "Save 10% with coupon"
+    const couponRaw = pick(/(?:promoPriceBlockMessage|couponBadge)[\s\S]{0,300}?Save\s+(\$[\d.]+|\d+%)/i)
+                   || pick(/Save\s+(\$[\d.]+|\d+%)\s+with (?:coupon|Coupon)/i);
+
+    // 划线价 · List Price（优先在 buyBox 范围内找）
+    const listPriceRaw = (buyBox.match(/<span class="a-price a-text-price[^"]*"[\s\S]{0,200}?<span class="a-offscreen">\s*(\$[\d.,]+)\s*<\/span>/i)?.[1]
+                       || buyBox.match(/data-a-strike="true"[\s\S]{0,200}?a-offscreen">\s*(\$[\d.,]+)\s*<\/span>/i)?.[1]
+                       || pick(/basisPrice[\s\S]{0,300}?<span class="a-offscreen">\s*(\$[\d.,]+)\s*<\/span>/i)
+                       || '').trim();
+
+    // 送达时间 · "FREE delivery Tue, Jul 14"
+    const deliveryRaw = pick(/id="mir-layout-DELIVERY_BLOCK"[\s\S]{0,600}?<span[^>]*>\s*([A-Z][a-z]+,\s+[A-Z][a-z]+\s+\d+)/i)
+                     || pick(/FREE (?:delivery|Delivery)[^<]*?([A-Z][a-z]+,\s+[A-Z][a-z]+\s+\d+)/i);
 
     if (!title) throw new Error('未能解析商品标题 · 可能被 Amazon 反爬拦截或页面结构变化');
 
@@ -321,6 +368,10 @@ Feature bullets（前 3 条）: ${featureBullets.slice(0, 3).join(' | ') || '未
       }
     } catch (e) { console.warn('  [ASIN lookup] LLM 抽取失败:', e.message); }
 
+    // 价格数值化（用于比较 / 计算折扣）
+    const priceNum = priceRaw ? parseFloat(priceRaw.replace(/[^0-9.]/g, '')) : null;
+    const listPriceNum = listPriceRaw ? parseFloat(listPriceRaw.replace(/[^0-9.]/g, '')) : null;
+
     const result = {
       ok: true,
       asin,
@@ -331,13 +382,23 @@ Feature bullets（前 3 条）: ${featureBullets.slice(0, 3).join(' | ') || '未
       model: llmData?.model || asin,
       cat: llmData?.cat || breadcrumb[breadcrumb.length - 1] || '',
       price: priceRaw,
+      priceNum,
+      listPrice: listPriceRaw,
+      listPriceNum,
+      imageUrl,
+      stars,
+      reviews,
+      prime,
+      deal,
+      coupon: couponRaw || null,
+      delivery: deliveryRaw || null,
       breadcrumb,
       featureBullets: featureBullets.slice(0, 5),
       suggestedGoal: llmData?.suggestedGoal || '',
       llmEnriched: !!llmData,
       ms: Date.now() - t0,
     };
-    console.log(`  [ASIN lookup] ${asin} → "${(result.title||'').slice(0,50)}" · brand=${result.brand} · ${result.ms}ms · llm=${!!llmData}`);
+    console.log(`  [ASIN lookup] ${asin} → "${(result.title||'').slice(0,50)}" · brand=${result.brand} · $${priceNum||'?'} · ★${stars||'?'} · ${reviews||'?'} reviews · img=${imageUrl?'✓':'✗'} · ${result.ms}ms · llm=${!!llmData}`);
     res.json(result);
   } catch (e) {
     console.error(`  [ASIN lookup] ${asin} failed:`, e.message);

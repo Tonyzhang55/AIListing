@@ -2678,9 +2678,138 @@ function fmtAmzPrice(p){
 }
 function starsHTML(v){const f=Math.floor(v),h=v-f>=.5;return "★".repeat(f)+(h?"½":"")+"☆".repeat(5-f-(h?1:0));}
 
+/* 实时对比数据 · 从 amazon.com 抓的真实字段 · null 表示走 mock */
+let realCompareData = null;
+
+/* 用户输入 3 个真实 ASIN · 后端并发 fetch */
+async function promptRealAsinCompare(){
+  const html = `
+    <div style="padding:14px 16px;background:var(--q-purple-wash);border-radius:9px;margin:6px 0">
+      <b>输入 3 个真实 ASIN · 从 amazon.com 抓实时数据</b>
+      <p style="font-size:11.5px;color:var(--ink-3);margin:5px 0 8px">价格 / 主图 / 评分 / 评论数 / Prime · 全部真实</p>
+      ${[1,2,3].map(i=>`<div style="margin-bottom:6px"><input type="text" id="ra${i}" placeholder="ASIN ${i} · B0 开头 10 位" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-family:monospace;font-size:12px"></div>`).join('')}
+      <div class="qr-row" style="margin-top:8px">
+        <button class="qr primary" onclick="runRealAsinCompare()">🌐 抓取 amazon.com 并对比</button>
+        <button class="qr" onclick="fillDemoAsins()">用示例 ASIN（Instant Pot / Ninja / COMFEE）</button>
+      </div>
+    </div>`;
+  await aiSay(html);
+}
+
+function fillDemoAsins(){
+  // 已在 amazon.com 验证真实存在的示例 ASIN · 用户可以随时改成自己的
+  const demo = ['B00FLYWNYQ', 'B075CYMYK6', ''];
+  demo.forEach((a,i)=>{const el=$("ra"+(i+1)); if(el) el.value=a;});
+  const s3 = $("ra3");
+  if (s3){ s3.placeholder = '第 3 个 ASIN · 比如你要对比的竞品 · 可留空只对比前 2 个'; s3.focus(); }
+  toast('已填入 2 个真实 Instant Pot ASIN · 第 3 个可以填你想对比的竞品，或直接点抓取');
+}
+
+async function runRealAsinCompare(){
+  const asins = [1,2,3].map(i=>($("ra"+i)?.value||'').trim().toUpperCase()).filter(x=>/^B0[A-Z0-9]{8}$/.test(x));
+  if (asins.length < 2) { toast('至少输入 2 个合法 ASIN · B0 开头 10 位'); return; }
+  addMsg("user", `对比 ${asins.join(' · ')}`);
+
+  // 进度提示
+  const bar = addMsg("ai", `<div style="padding:9px 11px;background:var(--q-purple-wash);border-radius:8px;font-size:11.5px;color:var(--q-purple-dark)">
+    <span class="spinner"></span> 并发从 <b>amazon.com</b> 抓取 ${asins.length} 个 ASIN 的实时数据…</div>`);
+
+  // 并发 fetch
+  const results = await Promise.all(asins.map(a => api.asinLookup(a, 'US').catch(e=>({ok:false, asin:a, error:e.message}))));
+  bar.parentElement.remove(); saveRecChat();
+
+  const failed = results.filter(r=>!r.ok);
+  if (failed.length) {
+    await aiSay(`<span style="color:var(--risk)">⚠ ${failed.length} 个 ASIN 抓取失败</span>：${failed.map(f=>`<code>${esc(f.asin)}</code> · ${esc(f.error||'')}`).join(' · ')}<br>其余会用真实数据渲染。`, 200);
+  }
+
+  // 把 asin-lookup 结果转成 compare card 需要的形状
+  realCompareData = results.map((r, idx) => {
+    if (!r.ok) return null; // 让 render 显示占位
+    return {
+      asin: r.asin,
+      brand: r.brand || '未知',
+      own: idx < asins.length - 1, // 前两个默认标为自家 · 最后一个为竞品（可以后续让用户切换）
+      imageUrl: r.imageUrl,
+      title: r.title,
+      price: r.priceNum,
+      listPrice: r.listPriceNum,
+      stars: r.stars,
+      reviews: r.reviews,
+      prime: r.prime,
+      deal: r.deal,
+      coupon: r.coupon,
+      delivery: r.delivery,
+      highlights: (r.featureBullets||[]).slice(0,4),
+      cat: r.cat,
+      // AI-Ready / Alexa 这些内部指标真实数据没有 · 演示先给占位
+      aiScore: null,
+      alexa: null,
+    };
+  }).filter(Boolean);
+
+  // 调 LLM 生成对比洞察（真实数据版）
+  let llmInsights = null;
+  if (backendConnected && ACTIVE_MODEL && realCompareData.length >= 2) {
+    const t = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span> <span style="font-size:11.5px;color:var(--ink-3)">用 <b>${esc(ACTIVE_MODEL.name)}</b> 分析真实数据…</span>`);
+    try {
+      const r = await api.compareAsins(realCompareData);
+      if (r.ok) llmInsights = r;
+    } catch(e){ console.warn('[Compare] LLM failed', e.message); }
+    t.parentElement.remove(); saveRecChat();
+  }
+
+  await renderRealCompareResult(llmInsights);
+  showAmazonPreview(); // 会自动读 realCompareData
+}
+
+async function renderRealCompareResult(llmInsights){
+  const items = realCompareData;
+  const cols = items.map(a => `
+    <th><span class="brand-tag ${a.own?'own':'comp'}">${a.own?'自家':'竞品'}</span>${esc(a.asin)}<br>
+    <span style="color:var(--ink-3);font-weight:400">${esc((a.brand||'').slice(0,12))} · ${esc((a.title||'').slice(0,20))}</span></th>`).join('');
+  const priceRow = items.map(a => a.price ? `<td>$${a.price.toFixed(2)}${a.listPrice?`<br><span style="font-size:10.5px;color:var(--ink-3);font-weight:400">List $${a.listPrice.toFixed(2)}</span>`:''}</td>` : '<td>—</td>').join('');
+  const ratingRow = items.map(a => a.stars ? `<td>★${a.stars} · ${(a.reviews||0).toLocaleString()}</td>` : '<td>—</td>').join('');
+  const catRow = items.map(a => `<td style="font-size:11px">${esc((a.cat||'').slice(0,40))}</td>`).join('');
+  const primeRow = items.map(a => `<td>${a.prime?'✓ Prime':'—'}${a.deal?' · ⚡ Deal':''}${a.coupon?` · ${esc(a.coupon)} coupon`:''}</td>`).join('');
+
+  await aiSay(`已从 <b>amazon.com</b> 抓取 <b>${items.length}</b> 个 ASIN 的实时买家页面数据 · 右侧同步渲染真实购物界面。
+    <div class="result-card">
+      <div class="rc-h"><div class="rc-ic">⚖️</div><div><b>${items.length} ASIN 真实数据对比</b><span>来自 amazon.com/dp/* · 抓取时间 ${new Date().toLocaleTimeString('zh-CN')}</span></div><span class="rc-badge pass">真实数据</span></div>
+      <table class="compare-tbl">
+        <thead><tr><th style="width:110px">维度</th>${cols}</tr></thead>
+        <tbody>
+          <tr><td>价格</td>${priceRow}</tr>
+          <tr><td>评分 / 评论</td>${ratingRow}</tr>
+          <tr><td>品类</td>${catRow}</tr>
+          <tr><td>徽标</td>${primeRow}</tr>
+        </tbody>
+      </table>
+    </div>
+    ${llmInsights?.insights?.length ? `
+      <p style="margin-top:10px"><b>💡 关键洞察</b> <span style="font-size:10.5px;background:var(--q-purple-wash);color:var(--q-purple-dark);padding:1px 6px;border-radius:3px">${esc(ACTIVE_MODEL?.name || 'LLM')} 基于真实数据分析</span>：</p>
+      <ul>${llmInsights.insights.map(i => `<li><b>${esc(i.tag || '')}：</b>${esc(i.body || '')}</li>`).join('')}</ul>
+    ` : ''}`, 1000);
+}
+
 async function startCompareAsins(){
   addMsg("user","对比 B08GK4VPMR、B08GK4S8LK、竞品 B0BXK6L2VP");
+  realCompareData = null; // 走 mock 路径 · 清空真实数据
 
+  // 联通后端时提供切换到真实对比的入口
+  if (backendConnected) {
+    await aiSay(`默认展示的是 <b>预置演示数据</b>（COMFEE + Broan 系列 · 价格评分为脚本 mock）。
+      <br>如果需要看真实 Amazon 数据，可以切到"真实对比"模式 · 输入任意 3 个 ASIN，后端并发抓 amazon.com 拿实时价格 / 主图 / 评分。
+      <div class="qr-row">
+        <button class="qr primary" onclick="promptRealAsinCompare()">🌐 用真实 ASIN 对比（从 amazon.com 抓）</button>
+        <button class="qr" onclick="continueMockCompare()">继续看演示数据</button>
+      </div>`, 200);
+    return;
+  }
+  await continueMockCompare();
+}
+
+async function continueMockCompare(){
   // 若模型联通 · 用 LLM 生成真实洞察，替代硬编码的 3 条结论
   let llmInsights = null;
   if (backendConnected && ACTIVE_MODEL) {
@@ -2737,41 +2866,90 @@ async function startCompareAsins(){
 }
 
 function showAmazonPreview(){
-  $("pvTitle").textContent="Amazon 商品页 · 买家视角";
-  $("pvSub").textContent="3 个 ASIN 的当前实时详情页 · Prime / 评分 / Buy Box 与 amazon.com 同步";
-  const cards=CMP_ASINS.map(a=>`
-    <div class="amz-product ${a.own?"own":"comp"}">
-      <div class="amz-product-label">${a.own?"COMFEE · 自家":"Broan · 竞品"}</div>
-      <div class="amz-img">${a.img}
+  const useReal = realCompareData && realCompareData.length > 0;
+  $("pvTitle").textContent = useReal ? "Amazon 商品页 · 真实数据视角" : "Amazon 商品页 · 买家视角";
+  $("pvSub").textContent = useReal
+    ? `${realCompareData.length} 个 ASIN 实时抓取 · 主图 / 价格 / 评分与 amazon.com 同步 · ${new Date().toLocaleTimeString('zh-CN')}`
+    : "3 个 ASIN 的当前实时详情页 · Prime / 评分 / Buy Box 与 amazon.com 同步";
+
+  const source = useReal ? realCompareData : CMP_ASINS;
+  const cards = source.map(a => renderAmzCard(a, useReal)).join("");
+  const banner = useReal
+    ? `<div style="font-size:11.5px;color:var(--q-purple-dark);margin-bottom:12px;padding:9px 12px;background:var(--q-purple-wash);border-radius:8px;border-left:3px solid var(--q-purple)">
+        <b>🌐 真实数据模式</b> · 图片 / 价格 / 评分 / 评论数直接从 amazon.com 抓取<br>
+        <span style="color:var(--ink-3);font-size:11px">FREE delivery 时间和部分 Prime 徽标可能因页面反爬结构变化未能解析</span>
+      </div>`
+    : `<div style="font-size:11.5px;color:var(--ink-2);margin-bottom:12px;padding:9px 12px;background:#fdf6e5;border-radius:8px;border-left:3px solid #d69e2e">
+        <b>📋 演示数据模式</b> · 3 个 ASIN 是脚本预置的 mock（COMFEE 系列）· 想看真实数据点<b>[🌐 用真实 ASIN 对比]</b>
+      </div>`;
+  $("pvBody").innerHTML=`
+    ${banner}
+    <div class="amz-view">${cards}</div>
+    <div style="font-size:11.5px;color:var(--ink-2);margin-top:14px;padding:11px 13px;background:var(--q-purple-wash);border-radius:8px;line-height:1.75;border-left:3px solid var(--q-purple)">
+      <b style="color:var(--q-purple-dark)">💡 为什么两个视角要一起看</b><br>
+      左边卡片给你 <b>结论</b>（AI 已算好差距和建议），右边给你 <b>用户实际看到什么</b>（主图、评分星星、Buy Box）。<br>Listing 优化最容易踩的坑就是"数据好看但用户点不动"——两个视角对齐才能做对决策。
+    </div>`;
+  $("preview").classList.add("open");
+  $("preview").classList.add("wide");
+}
+
+/* 单张 Amazon 商品卡 · useReal=true 用真实抓取数据（imageUrl 是 URL 而不是 emoji）*/
+function renderAmzCard(a, useReal){
+  const isOwn = a.own;
+  const label = useReal
+    ? (isOwn ? `${esc((a.brand||'自家').slice(0,12))} · 自家` : `${esc((a.brand||'竞品').slice(0,12))} · 竞品`)
+    : (isOwn ? "COMFEE · 自家" : "Broan · 竞品");
+
+  // 图片 · 真实时用 <img src>，mock 时用 emoji
+  const imgHtml = useReal && a.imageUrl
+    ? `<img src="${esc(a.imageUrl)}" alt="${esc((a.title||'').slice(0,60))}" style="max-width:100%;max-height:180px;object-fit:contain;background:#fff" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'📦',style:'font-size:60px;line-height:180px'}))">`
+    : (a.img || '📦');
+
+  const stars = a.stars || 0;
+  const reviews = a.reviews || 0;
+  const price = a.price;
+  const listPrice = a.listPrice;
+  const highlights = a.highlights || [];
+  const savings = (listPrice && price) ? `Save $${(listPrice-price).toFixed(2)} (${Math.round((1-price/listPrice)*100)}%)` : '';
+
+  return `
+    <div class="amz-product ${isOwn?"own":"comp"}">
+      <div class="amz-product-label">${label}</div>
+      <div class="amz-img" style="${useReal?'padding:12px;background:#fff':''}">${imgHtml}
         <div class="amz-badges">${a.prime?'<span class="amz-badge prime">prime</span>':""}${a.deal?'<span class="amz-badge deal">Lightning Deal</span>':""}</div>
       </div>
       <div class="amz-body">
-        <div class="amz-title">${esc(a.title)}</div>
-        <div class="amz-stars"><span class="stars">${starsHTML(a.stars)}</span><span class="score">${a.stars}</span><span class="rev">${a.reviews.toLocaleString()} ratings</span></div>
-        <div class="amz-price-line">${a.listPrice?`<span class="amz-list">List: $${a.listPrice.toFixed(2)}</span>`:""}${fmtAmzPrice(a.price)}</div>
-        ${a.listPrice?`<div class="amz-save">Save $${(a.listPrice-a.price).toFixed(2)} (${Math.round((1-a.price/a.listPrice)*100)}%)</div>`:""}
-        ${a.coupon?`<span class="amz-coupon">Save ${esc(a.coupon)} with Coupon</span>`:""}
-        <div class="amz-delivery"><b>FREE delivery</b> ${esc(a.delivery)}<br>Or fastest delivery <b>Tomorrow</b></div>
+        <div class="amz-title">${esc(a.title||'')}</div>
+        ${stars ? `<div class="amz-stars"><span class="stars">${starsHTML(stars)}</span><span class="score">${stars}</span><span class="rev">${reviews.toLocaleString()} ratings</span></div>` : ''}
+        ${price ? `<div class="amz-price-line">${listPrice?`<span class="amz-list">List: $${listPrice.toFixed(2)}</span>`:""}${fmtAmzPrice(price)}</div>` : '<div class="amz-price-line" style="color:var(--ink-3)">价格未解析</div>'}
+        ${savings ? `<div class="amz-save">${savings}</div>` : ''}
+        ${a.coupon ? `<span class="amz-coupon">Save ${esc(a.coupon)} with Coupon</span>` : ''}
+        <div class="amz-delivery"><b>FREE delivery</b> ${esc(a.delivery||'—')}<br>${a.delivery?'Or fastest delivery <b>Tomorrow</b>':'<span style="color:var(--ink-3);font-size:10.5px">送达时间未解析</span>'}</div>
         <div class="amz-buy">
           <button class="amz-buy-btn cart">Add to Cart</button>
           <button class="amz-buy-btn now">Buy Now</button>
         </div>
-        <div class="amz-abt"><b>About this item</b><ul>${a.highlights.map(h=>`<li>${esc(h)}</li>`).join("")}</ul></div>
+        ${highlights.length ? `<div class="amz-abt"><b>About this item</b><ul>${highlights.map(h=>`<li>${esc(h)}</li>`).join("")}</ul></div>` : ''}
         <div class="amz-meta">
-          <span>ASIN <b style="color:var(--ink-2)">${a.asin}</b></span>
-          <span class="meta-ai">AI-Ready ${a.aiScore} · Alexa ${a.alexa}%</span>
+          <span>ASIN <b style="color:var(--ink-2)">${esc(a.asin)}</b>${useReal?' · <a href="https://www.amazon.com/dp/'+esc(a.asin)+'" target="_blank" rel="noopener" style="color:var(--q-purple);text-decoration:none">在 amazon.com 打开 →</a>':''}</span>
+          ${(a.aiScore||a.alexa) ? `<span class="meta-ai">AI-Ready ${a.aiScore||'—'} · Alexa ${a.alexa||'—'}%</span>` : '<span class="meta-ai" style="color:var(--ink-3)">AI-Ready 需 Listing 优化流程后生成</span>'}
         </div>
       </div>
-      ${a.own?`<div style="padding:6px 10px;background:var(--q-purple-wash);border-top:1px solid #e5deff;text-align:center"><button class="qr primary" style="padding:5px 12px;font-size:11.5px;width:100%" onclick="startListingWithAsin('${a.asin}')">🚀 优化此 ASIN · 进入 Listing 流程</button></div>`:""}
-    </div>`).join("");
-  $("pvBody").innerHTML=`
-    <div class="amz-view">${cards}</div>
-    <div style="font-size:11.5px;color:var(--ink-2);margin-top:14px;padding:11px 13px;background:var(--q-purple-wash);border-radius:8px;line-height:1.75;border-left:3px solid var(--q-purple)">
-      <b style="color:var(--q-purple-dark)">💡 为什么两个视角要一起看</b><br>
-      左边卡片给你 <b>结论</b>（AI 已算好差距和建议），右边给你 <b>用户实际看到什么</b>（评分星星、Buy Box 按钮、主图差异）。<br>Listing 优化最容易踩的坑就是"数据好看但用户点不动"——两个视角对齐才能做对决策。
+      ${isOwn?`<div style="padding:6px 10px;background:var(--q-purple-wash);border-top:1px solid #e5deff;text-align:center"><button class="qr primary" style="padding:5px 12px;font-size:11.5px;width:100%" onclick="startListingWithAsinReal('${esc(a.asin)}')">🚀 优化此 ASIN · 进入 Listing 流程</button></div>`:""}
     </div>`;
-  $("preview").classList.add("open");
-  $("preview").classList.add("wide");
+}
+
+/* 真实模式下的"优化此 ASIN"入口 · 不依赖硬编码 profile，直接用 asin 走标准流程 */
+async function startListingWithAsinReal(asin){
+  addMsg("user", `基于对比分析，优化 ${asin}`);
+  closePreview();
+  resetKbFindResult();
+  recChatActive=true;
+  setRecStep(1);
+  asinAnswers = { asin, market: '美国站 (US)' };
+  await aiSay(`✓ 收到。将从 <b>amazon.com/dp/${esc(asin)}</b> 重新抓取最新画像用于 Listing 优化…`, 300);
+  // 复用现有 ASIN 抓取流程
+  await handleAsinInput(asin);
 }
 
 /* =====================================================================
