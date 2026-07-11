@@ -1181,6 +1181,14 @@ const api = {
   async testProvider(pid){ const r = await fetch(this.base+'/providers/'+pid+'/test', { method:'POST' }); return r.json(); },
   async setActiveModel(provider, modelId, name){ const r = await fetch(this.base+'/providers/active-model', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ provider, modelId, name }) }); return r.json(); },
   async getProviderModels(pid){ const r = await fetch(this.base+'/providers/'+pid+'/models'); return r.json(); },
+  // AI 业务路由（用真实 LLM 做推理）
+  async intent(message){ const r = await fetch(this.base+'/ai/intent', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message }) }); return r.json(); },
+  async generateListing(payload){ const r = await fetch(this.base+'/ai/generate-listing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); return r.json(); },
+  async scoreListing(listing){ const r = await fetch(this.base+'/ai/score-listing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ listing }) }); return r.json(); },
+  async compareAsins(asins){ const r = await fetch(this.base+'/ai/compare-asins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ asins }) }); return r.json(); },
+  async complianceCheck(text){ const r = await fetch(this.base+'/ai/compliance-check', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text }) }); return r.json(); },
+  async asinLookup(asin, market){ const r = await fetch(this.base+'/ai/asin-lookup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ asin, market }) }); return r.json(); },
+  async kbFindForListing(payload){ const r = await fetch(this.base+'/ai/kb-find-for-listing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); return r.json(); },
 };
 let backendConnected = false;
 async function checkBackend(){
@@ -1461,10 +1469,106 @@ function mdToHtml(md){
   return s;
 }
 
+/* =====================================================================
+   意图路由 · LLM 分类 + regex fallback
+===================================================================== */
+// Regex fallback · 当 LLM 未配置或调用失败时用
+function detectIntentLocal(text){
+  const asinList = (text.match(/B0[A-Z0-9]{8}/gi) || []);
+  if (asinList.length >= 2 && /对比|比较|对标|哪个更|差异|compare|vs\.?/i.test(text))
+    return { kind: 'compare', asins: asinList, source: 'regex' };
+  if (/modular title|标题迁移|标题拆分|批量迁移/i.test(text))
+    return { kind: 'migration', source: 'regex' };
+  if ((/评分|诊断|ai-?ready|健康度|听诊/i.test(text)) && (/listing|标题|详情|asin|b0[a-z0-9]{8}/i.test(text)))
+    return { kind: 'audit', source: 'regex' };
+  if (/优化.*listing|listing.*优化|优化.*(标题|文案|详情|bullets?|highlights?)|帮我优化|生成.*listing|重写.*(标题|listing)|改.*(标题|highlights?)|写.*(highlights?|item name)|make.*listing.*better|improve.*listing/i.test(text))
+    return { kind: 'listingOpt', source: 'regex' };
+  return { kind: 'chat', source: 'regex' };
+}
+
+// LLM 分类 · 优先用 · 失败 fallback 到 regex
+async function detectIntent(text){
+  if (!backendConnected || !ACTIVE_MODEL) return detectIntentLocal(text);
+  try {
+    const r = await api.intent(text);
+    if (!r.ok) throw new Error(r.error || 'intent failed');
+    // 归一化：LLM 返回 kind 或 intent 字段
+    const kind = r.intent || r.kind || 'chat';
+    return { kind, asins: r.extractedAsins || [], confidence: r.confidence, reason: r.reason, source: 'llm' };
+  } catch(e){
+    console.warn('[Intent] LLM 失败，降级到 regex：', e.message);
+    return detectIntentLocal(text);
+  }
+}
+
+/* 保存当前"待走"的原文，用于用户点"就用普通对话"时透传给 Claude */
+let pendingChatText = '';
+async function forceChatOnCurrent(){
+  const text = pendingChatText;
+  pendingChatText = '';
+  if(!text) return;
+  await sendToClaude(text);
+}
+
+async function sendToClaude(text){
+  if (!(backendConnected && ACTIVE_MODEL)) {
+    aiSay(`还没配置大模型 · 自由问答需要先联通一个 Provider。
+    <div class="qr-row"><button class="qr primary" onclick="openProviderModal()">⚙ 现在配置</button></div>`);
+    return;
+  }
+  const bubble = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span>`);
+  try {
+    const r = await api.chat(text, { view: 'home', scope: $("scopeName")?.textContent || '' });
+    if (r.error) throw new Error(r.detail || r.error);
+    const html = mdToHtml(r.reply || '(空响应)');
+    const badge = r.mock
+      ? '<span style="font-size:10px;background:var(--b-bg);color:var(--b-fg);padding:1px 6px;border-radius:3px">MOCK</span>'
+      : '<span style="font-size:10px;background:var(--a-bg);color:var(--a-fg);padding:1px 6px;border-radius:3px">LIVE</span>';
+    const modelTag = r.model
+      ? `<div style="font-size:10.5px;color:var(--ink-3);margin-top:8px;padding-top:6px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:6px">${badge} 🧠 ${esc(r.model.name || r.model.modelId)}</div>`
+      : '';
+    bubble.innerHTML = html + modelTag;
+  } catch(e) {
+    bubble.innerHTML = `<span style="color:var(--risk)"><b>调用失败</b>：${esc(e.message)}</span>
+      <div class="qr-row"><button class="qr" onclick="openProviderModal()">⚙ 检查配置</button></div>`;
+  }
+  scrollHome(); saveRecChat();
+}
+
 async function freeSend(){
   const v=$("homeInput").value.trim();if(!v)return;
   $("homeInput").value="";addMsg("user",esc(v));
   if(asinFieldIdx>=0){asinAnswer(v);return;}
+
+  // 先做意图识别（LLM 优先，fallback regex）
+  const intentBubble = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span> <span style="font-size:11.5px;color:var(--ink-3)">识别意图中…</span>`);
+  const intent = await detectIntent(v);
+  intentBubble.parentElement.remove(); // 清理临时 typing
+  saveRecChat();
+
+  if (intent.kind && intent.kind !== 'chat') {
+    const cfg = {
+      listingOpt: {icon:'🚀', title:'AI Listing 优化', desc:'4 步闭环 · 场景提取 → 内容生成 → AI 评分 → A/B 测试（可选）', fn:'startListing()'},
+      compare:    {icon:'⚖️', title:'多 ASIN 对比',    desc:`已识别 ${intent.asins?.length||0} 个 ASIN · 生成对比卡 + Amazon 买家视角`, fn:'startCompareAsins()'},
+      migration:  {icon:'🔄', title:'Modular Title 批量迁移', desc:'把旧标题拆成 Item Name + Highlights · 07/27 前必做', fn:'startMigration()'},
+      audit:      {icon:'📊', title:'AI 评分诊断',     desc:'8 维度加权评估当前 Listing · 定位差距', fn:'startAudit()'},
+      compliance: {icon:'🛡️', title:'合规红线检测',    desc:'扫描禁忌词与合规风险 · 给改写建议', fn:'runCompliance()'},
+    }[intent.kind];
+    if (cfg) {
+      pendingChatText = v;
+      const srcTag = intent.source === 'llm'
+        ? `<span style="font-size:10px;background:var(--q-purple-wash);color:var(--q-purple-dark);padding:1px 6px;border-radius:3px">LLM 判断 · ${(intent.confidence||0).toFixed(2)}</span>`
+        : `<span style="font-size:10px;background:var(--bg);color:var(--ink-3);padding:1px 6px;border-radius:3px">Regex fallback</span>`;
+      await aiSay(`${srcTag} 识别到你的意图是 <b>${cfg.icon} ${esc(cfg.title)}</b>${intent.reason ? '<br><span style="font-size:11.5px;color:var(--ink-3)">'+esc(intent.reason)+'</span>' : ''}
+      <p style="font-size:12px;color:var(--ink-2);margin:6px 0">${esc(cfg.desc)}</p>
+      <div class="qr-row">
+        <button class="qr primary" onclick="${cfg.fn}">✓ 进入 ${esc(cfg.title)}</button>
+        <button class="qr" onclick="forceChatOnCurrent()">💬 还是用 AI 直接回答</button>
+      </div>`, 200);
+      return;
+    }
+  }
+
   // 已联通模型 · 走真实调用
   if (backendConnected && ACTIVE_MODEL) {
     const bubble = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span>`);
@@ -1526,6 +1630,40 @@ async function startAudit(){
   <div class="qr-row"><button class="qr" onclick="startListing()">基于差距启动 6 步优化</button></div>`,900);
 }
 
+async function runCompliance(){
+  addMsg("user","检查 Listing 有没有禁忌词或合规风险。");
+  if (!(backendConnected && ACTIVE_MODEL)) {
+    await aiSay(`合规检测需要先联通大模型 · 点 ⚙ 配置一个 Provider 再试。
+    <div class="qr-row"><button class="qr primary" onclick="openProviderModal()">⚙ 配置模型</button></div>`);
+    return;
+  }
+  // 用示例 Listing 文本演示
+  const sample = `Item Name: COMFEE 30-Inch #1 Best Professional-Grade Range Hood
+Highlights: Ultra-Quiet Instant-Pot Style, FDA Approved, Cures Kitchen Odor, Eco-Friendly Certified
+Bullets:
+- Sanitizing airflow removes 99% bacteria
+- Best-in-class performance guaranteed
+- Compatible with any KitchenAid stove`;
+  await aiSay(`用 <b>${esc(ACTIVE_MODEL.name)}</b> 扫这段示例 Listing 找合规风险…`, 300);
+  try {
+    const r = await api.complianceCheck(sample);
+    if (!r.ok) throw new Error(r.error || '合规检测失败');
+    const issues = r.issues || [];
+    const issueHtml = issues.length ? issues.map(i => `
+      <div style="border-left:3px solid var(--risk);background:#fce8e0;border-radius:5px;padding:8px 12px;margin:6px 0;font-size:12.5px">
+        <b style="color:var(--risk)">${esc(i.type || '')}</b> <span style="font-size:10.5px;background:#fff;padding:1px 6px;border-radius:3px;color:var(--risk)">${esc(i.severity || '中')}</span><br>
+        <span style="color:var(--ink-2)">命中：${esc(i.match || '')}</span><br>
+        <span style="color:var(--amz-navy)">💡 ${esc(i.advice || '')}</span>
+      </div>`).join('') : '<p style="color:var(--a-fg)">✓ 未发现合规问题</p>';
+    await aiSay(`扫描完成 · <b>Clean Score: ${r.cleanScore || 0}/100</b>${issues.length ? ` · 发现 <b>${issues.length}</b> 项风险` : ''}
+      <p style="font-size:12px;color:var(--ink-2);margin-top:6px">${esc(r.summary || '')}</p>
+      ${issueHtml}
+      <div class="qr-row"><button class="qr primary" onclick="startListing()">🚀 重新生成合规 Listing</button></div>`, 300);
+  } catch(e) {
+    await aiSay(`<span style="color:var(--risk)">合规检测失败：${esc(e.message)}</span>`);
+  }
+}
+
 /* ===== 步骤条控制 ===== */
 const REC_SUBS={
   1:["接收 ASIN 画像","确认数据源清单","多源抓取执行","证据评审"],
@@ -1564,16 +1702,72 @@ const ASIN_FIELDS = [
 ];
 let asinAnswers={}, asinFieldIdx=-1;
 
+/* 开新 Listing 时清空之前的知识库检索结果 · 避免旧品类污染新 ASIN */
+function resetKbFindResult(){ kbFindResult=null; customSources=[]; }
 async function startListing(){
+  resetKbFindResult();
   recChatActive=true;
   setRecStep(1);
   addMsg("user","帮我为一款 SKU 走一次 Listing 优化。");
-  await aiSay(`好的，先确认这次优化的对象。共需 5 项基础信息：
-    <ul style="margin:6px 0 4px"><li>1. ASIN</li><li>2. 品类</li><li>3. 型号</li><li>4. 目标站点</li><li>5. 核心业务目标（可选）</li></ul>
-    <p style="font-size:12px;color:var(--ink-3)">逐项回复即可，全部提供后会汇总为「ASIN 画像」供你核对，作为后续 6 步闭环的输入。</p>`);
+  await aiSay(`好的，只需要一个 <b>ASIN</b>——我会自动去 Amazon 商品页抓品类 / 型号 / 品牌 / 标题 / 价格 / 面包屑，再让 LLM 从原始信息里结构化推断，你只需要核对 + 补业务目标。`);
   asinAnswers={}; asinFieldIdx=0;
-  await askAsinField();
+  await askAsinOnly();
 }
+
+async function askAsinOnly(){
+  setRecSub(0, '接收 ASIN');
+  await aiSay(`请提供 <b>ASIN</b>（B0 开头 10 位字符）：
+  <div class="qr-row">
+    <button class="qr ghost" onclick="asinQuickInput('B00FLYWNYQ')">B00FLYWNYQ · Instant Pot Duo（真实可抓）</button>
+    <button class="qr ghost" onclick="asinQuickInput('B08GK4VPMR')">B08GK4VPMR · COMFEE（原型 mock · 会 404）</button>
+  </div>`, 300);
+}
+
+function asinQuickInput(a){
+  addMsg("user", esc(a));
+  handleAsinInput(a);
+}
+
+async function handleAsinInput(raw){
+  const asin = (raw || '').trim().toUpperCase();
+  if (!/^B0[A-Z0-9]{8}$/.test(asin)) {
+    await aiSay(`<span style="color:var(--risk)">不像 ASIN 格式</span>（应该是 B0 开头 10 位字符，比如 <code>B00FLYWNYQ</code>）· 请重新提供。`);
+    await askAsinOnly();
+    return;
+  }
+  asinAnswers = { asin, market: '美国站 (US)' };
+  setRecSub(0, `Amazon 抓取 ${asin}…`);
+  const b = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span> <span style="font-size:11.5px;color:var(--ink-3)">从 <b>amazon.com/dp/${esc(asin)}</b> 抓取商品信息…</span>`);
+  try {
+    const r = await api.asinLookup(asin, 'US');
+    b.parentElement.remove(); saveRecChat();
+    if (!r.ok) throw new Error(r.error || '抓取失败');
+    // 预填画像
+    asinAnswers.model = r.model || asin;
+    asinAnswers.cat = r.cat || '';
+    asinAnswers.brand = r.brand || '';
+    asinAnswers.title = r.title || '';
+    asinAnswers.price = r.price || '';
+    asinAnswers.goal = r.suggestedGoal || '';
+    const llmTag = r.llmEnriched
+      ? `<span style="font-size:10px;background:var(--q-purple-wash);color:var(--q-purple-dark);padding:1px 6px;border-radius:3px">LLM 结构化</span>`
+      : `<span style="font-size:10px;background:var(--bg);color:var(--ink-3);padding:1px 6px;border-radius:3px">仅 HTML 抽取</span>`;
+    await aiSay(`✓ 抓取成功 · ${llmTag} <a href="${esc(r.url)}" target="_blank" style="font-size:11px;color:var(--amz-blue)">${esc(r.url)}</a>
+      <div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12.3px;background:#fafafa;line-height:1.7">
+        <b>📌 标题：</b>${esc(r.title)}<br>
+        <b>🏷️ 品牌：</b>${esc(r.brand || '未识别')} · <b>💰 价格：</b>${esc(r.price || '未识别')}<br>
+        <b>📁 面包屑：</b>${(r.breadcrumb||[]).map(esc).join(' › ') || '未识别'}
+      </div>`, 400);
+  } catch (e) {
+    b.parentElement.remove(); saveRecChat();
+    await aiSay(`⚠ Amazon 抓取失败：${esc(e.message)}<br>
+      <span style="font-size:11.5px;color:var(--ink-3)">可能原因：ASIN 不存在 / 该 ASIN 只在其他站点售卖 / 反爬拦截。已切换到手动填写模式。</span>`, 300);
+    asinAnswers.model = ''; asinAnswers.cat = ''; asinAnswers.goal = '';
+  }
+  await showAsinCard();
+}
+
+/* ===== 保留：旧的逐项收集流（后端未联通时的 fallback）===== */
 async function askAsinField(){
   const f=ASIN_FIELDS[asinFieldIdx];
   setRecSub(0,`接收 ASIN 信息 ${asinFieldIdx+1}/${ASIN_FIELDS.length} · ${f.label}`);
@@ -1586,6 +1780,12 @@ function asinQuick(i){
   asinAnswer(ASIN_FIELDS[i].sample);
 }
 async function asinAnswer(v){
+  // 首个输入是 ASIN · 走新的自动抓取流
+  if (asinFieldIdx === 0) {
+    await handleAsinInput(v);
+    asinFieldIdx = -1;
+    return;
+  }
   asinAnswers[ASIN_FIELDS[asinFieldIdx].key]=v;
   asinFieldIdx++;
   if(asinFieldIdx<ASIN_FIELDS.length){await askAsinField();}
@@ -1611,17 +1811,109 @@ async function showAsinCard(){
   </div>`,700);
 }
 
-/* ===== Step 1 · 数据源确认（画像 → 数据源清单 → 抓取 → 证据评审）===== */
+/* ===== Step 1 · 数据源确认 · 从知识库查真实数据 ===== */
+let kbFindResult = null; // 保存 kbFindForListing 返回结果
+
 async function confirmProfile(btn){
   btn.disabled=true;btn.textContent="✓ 已确认";
   ["asin","cat","model","market","goal"].forEach(k=>{const el=$("af_"+k);if(el)asinAnswers[k]=el.value.trim();});
   setRecSub(1);
-  const hasRank=/搜索|排名|第一页|排行|top ?\d|page ?1|自然流量/i.test(asinAnswers.goal||"");
-  const preface=hasRank
-    ? `✓ ASIN 画像已保存。<b>检测到目标包含「搜索排名进入第一页」</b>——这不是单靠 Alexa 场景数据能达成的。搜索排名的三大支点是 <b>A9 关键词覆盖 · 高价值搜索词命中 · 竞品差异化</b>，因此除了 Alexa 三路，我默认再加上 <b>Brand Analytics 搜索词报告 · SP 广告搜索词 · 竞品 Listing 抓取</b>共 6 路；另有 2 路可选，也可以上传自定义数据（例如新的竞品 ASIN 或品牌方最新话术）。`
-    : `✓ ASIN 画像已保存。默认启用 Alexa 三路 + 搜索词与竞品参考共 6 路数据源；另有 2 路可选，也可以上传自定义数据。`;
-  await aiSay(`${preface}
-    <div class="qr-row"><button class="qr primary" onclick="openDataSources('prep')">📡 打开数据源清单（8 路 + 自定义）</button></div>`,800);
+
+  const b = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span> <span style="font-size:11.5px;color:var(--ink-3)">✓ ASIN 画像已保存。正在<b>从知识库查找 ${esc(asinAnswers.cat || '')} 相关数据源</b>…${backendConnected && ACTIVE_MODEL ? ' 同时用 LLM 根据你的业务目标推荐必开数据源。' : ''}</span>`);
+
+  try {
+    kbFindResult = await api.kbFindForListing({
+      asin: asinAnswers.asin, cat: asinAnswers.cat,
+      brand: asinAnswers.brand, goal: asinAnswers.goal, title: asinAnswers.title,
+    });
+    if (!kbFindResult.ok) throw new Error(kbFindResult.error || '查询失败');
+    b.parentElement.remove(); saveRecChat();
+
+    const { availableCount, missingRequiredCount, missingSuggestedCount, sources, recommendations } = kbFindResult;
+    const reasonHtml = recommendations?.reason
+      ? `<div style="font-size:11.5px;color:var(--q-purple-dark);background:var(--q-purple-wash);border-left:3px solid var(--q-purple);border-radius:6px;padding:8px 11px;margin:8px 0;line-height:1.6">
+           <b>🧠 LLM 建议：</b>${esc(recommendations.reason)}
+         </div>` : '';
+    const kbBanner = `
+      <p><b>知识库检索结果</b>：
+        <span style="color:var(--a-fg);font-weight:600">✓ ${availableCount} 类可用</span>
+        ${missingRequiredCount > 0 ? `· <span style="color:var(--risk);font-weight:600">⚠ ${missingRequiredCount} 类必需缺失</span>` : ''}
+        ${missingSuggestedCount > 0 ? `· <span style="color:var(--b-fg);font-weight:600">💡 ${missingSuggestedCount} 类建议补充</span>` : ''}
+      </p>
+      ${reasonHtml}`;
+
+    if (missingRequiredCount > 0) {
+      // 必需的缺了 · 让用户先补
+      const missingList = sources.filter(s => s.status === 'missing_required').map(s => `
+        <div style="border:1px solid #f0b4a0;background:#fce8e0;border-radius:8px;padding:9px 12px;margin:6px 0;font-size:12px">
+          <b style="color:var(--risk)">${esc(s.name)}</b> <span style="font-size:10.5px;color:var(--ink-3)">${esc(s.category)}</span><br>
+          <span style="color:var(--ink-2)">${esc(s.desc)}</span>
+          <button class="qr" style="padding:3px 10px;font-size:11px;margin-top:4px;border-color:var(--risk);color:var(--risk)" onclick="uploadKbFor('${s.typeKey}','${esc(s.name)}')">📎 上传该类文件</button>
+        </div>`).join('');
+      await aiSay(`${kbBanner}
+        <p style="color:var(--risk);margin-top:6px"><b>⚠ 缺失以下必需数据源</b>，Listing 优化质量会受影响 · 建议先补充：</p>
+        ${missingList}
+        <div class="qr-row" style="margin-top:8px">
+          <button class="qr primary" onclick="openDataSources('prep')">📡 我已知晓 · 查看全部清单</button>
+          <button class="qr" onclick="skipMissingAndContinue()">跳过缺失 · 用现有数据继续</button>
+        </div>`, 300);
+    } else {
+      // 数据够，直接进入清单确认
+      await aiSay(`${kbBanner}
+        <p>核心数据源都在知识库里 · 可以直接开始抓取。你也可以在清单里增删或上传补充。</p>
+        <div class="qr-row"><button class="qr primary" onclick="openDataSources('prep')">📡 查看数据源清单</button></div>`, 300);
+    }
+  } catch (e) {
+    b.parentElement.remove(); saveRecChat();
+    await aiSay(`<span style="color:var(--risk)">知识库查询失败：${esc(e.message)}</span> · 已切换到默认清单模式（8 路 + 自定义 · 未按品类过滤）。
+      <div class="qr-row"><button class="qr primary" onclick="openDataSources('prep')">📡 打开默认清单</button></div>`, 300);
+  }
+}
+
+/* 用户点"上传该类文件" · 演示原型：文件选择器 → 前端标记该类型为已补充 · 立即刷新清单 */
+function uploadKbFor(typeKey, name){
+  const inp=document.createElement('input');
+  inp.type='file';
+  inp.accept='.csv,.jsonl,.json,.tsv,.xlsx,.md,.txt,.pdf,.html';
+  inp.onchange=()=>{
+    const f=inp.files&&inp.files[0];
+    if(!f){toast('未选择文件 · 已取消');return;}
+    // 演示原型：本地补一条 "会话内可用" 记录到 kbFindResult
+    if(kbFindResult&&Array.isArray(kbFindResult.sources)){
+      const s=kbFindResult.sources.find(x=>x.typeKey===typeKey);
+      if(s){
+        const wasAvailable=s.status==="available";
+        s.status="available";
+        s._on=true;
+        s.fileCount=(s.fileCount||0)+1;
+        s.files=s.files||[];
+        s.files.push({
+          id:'local_'+Date.now(),
+          name:f.name,
+          uploadedAt:'刚才',
+          project:'本次会话',
+          payload:{metric:'本地上传',value:`${Math.round(f.size/1024)} KB`},
+        });
+        // 更新计数
+        if(!wasAvailable){
+          kbFindResult.availableCount=(kbFindResult.availableCount||0)+1;
+          if(s.required) kbFindResult.missingRequiredCount=Math.max(0,(kbFindResult.missingRequiredCount||0)-1);
+          else kbFindResult.missingSuggestedCount=Math.max(0,(kbFindResult.missingSuggestedCount||0)-1);
+        }
+        // 如果清单面板开着，重绘
+        if($("preview")?.classList.contains("open")) renderDataSources();
+      }
+    }
+    toast(`已归档：${f.name} → ${name}`);
+    pushFeed('📎 数据源已补充', `${name} · ${f.name}（${Math.round(f.size/1024)} KB）· 演示原型内存暂存 · 真实实现落 S3 + DDB`);
+  };
+  inp.click();
+}
+
+/* 跳过缺失继续 · 直接打开清单 */
+function skipMissingAndContinue(){
+  toast('已跳过缺失数据源 · 用现有的开始抓取');
+  openDataSources('prep');
 }
 
 /* 数据源清单 · 单一事实：默认启用 6 路，2 路可选，可上传自定义 */
@@ -1638,39 +1930,51 @@ const DATA_SOURCES=[
 let customSources=[];
 let dataSourcePhase="prep"; /* prep=首次配置  topup=生成前追加 */
 
+/* ===== 数据源统一视图 =====
+   优先使用 kbFindResult.sources（真实知识库查询结果）
+   降级用旧的 DATA_SOURCES 常量（离线 / 无后端场景）
+   每个 source 有 _on 状态位（首次为 true 当有文件，否则 false）*/
+function initKbSourceStates(){
+  if(!kbFindResult||!Array.isArray(kbFindResult.sources))return;
+  kbFindResult.sources.forEach(s=>{
+    if(s._on===undefined) s._on=(s.status==="available");
+  });
+}
+function activeSourceCount(){
+  if(kbFindResult&&Array.isArray(kbFindResult.sources)){
+    return kbFindResult.sources.filter(s=>s._on&&s.status==="available").length+customSources.length;
+  }
+  return DATA_SOURCES.filter(s=>s.on).length+customSources.length;
+}
+
 function openDataSources(phase){
   dataSourcePhase=phase||dataSourcePhase||"prep";
   if(dataSourcePhase==="prep"&&recStepNow===1)setRecSub(1);
   if(dataSourcePhase==="topup"&&recStepNow===2)setRecSub(0);
   $("pvTitle").textContent=dataSourcePhase==="topup"?"追加数据源 · 生成前":"数据源清单 · 证据基础配置";
   $("pvSub").textContent=`${asinAnswers.model||asinAnswers.asin||"COMFEE CVU30W4AST"} · 目标：${(asinAnswers.goal||"").slice(0,42)}${(asinAnswers.goal||"").length>42?"…":""}`;
+  initKbSourceStates();
   renderDataSources();
   $("preview").classList.add("open");
 }
+
+/* 渲染：优先走 kbFindResult 真实数据；无则降级 DATA_SOURCES */
 function renderDataSources(){
-  const cats={};
-  DATA_SOURCES.forEach(s=>{cats[s.cat]=cats[s.cat]||[];cats[s.cat].push(s);});
-  const catBlocks=Object.entries(cats).map(([cat,arr])=>{
-    const items=arr.map(s=>`
-      <div style="border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:6px;opacity:${s.on?1:.55}">
-        <div style="display:flex;align-items:center;gap:10px">
-          <button class="switch ${s.on?"on":""}" ${s.locked?'style="opacity:.6;cursor:default"':""} onclick="${s.locked?"":`toggleDataSource('${s.id}')`}" aria-label="开关 ${escAttr(s.name)}"></button>
-          <div style="flex:1;min-width:0">
-            <b style="font-size:12.5px;color:var(--amz-navy)">${esc(s.name)}${s.locked?' <span style="font-size:10px;color:var(--ink-3);font-weight:400">必备</span>':""}${s.recommend?` <span style="font-size:10px;color:var(--amz-orange-dark);background:var(--amz-orange-wash);border-radius:4px;padding:1px 6px;margin-left:4px">推荐 · ${esc(s.recommend)}</span>`:""}</b>
-            <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">${esc(s.desc)}</div>
-          </div>
-          <span style="font-size:11px;color:var(--ink-3);white-space:nowrap;margin-left:6px">${esc(s.ev)}</span>
-        </div>
-      </div>`).join("");
-    return `<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase">${esc(cat)}</div>${items}</div>`;
-  }).join("");
+  const catBlocks=kbFindResult&&kbFindResult.sources
+    ? renderKbSourceBlocks(kbFindResult.sources)
+    : renderLegacySourceBlocks();
   const custom=customSources.length
-    ? customSources.map(c=>`<div style="border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin-bottom:6px;font-size:12px;background:var(--amz-orange-wash);display:flex;align-items:center;gap:8px"><b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(c.name)}</b><span style="color:var(--ink-3);font-size:11px">${esc(c.note||"")}</span></div>`).join("")
+    ? customSources.map(c=>`<div style="border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin-bottom:6px;font-size:12px;background:var(--q-purple-wash);display:flex;align-items:center;gap:8px"><b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(c.name)}</b><span style="color:var(--ink-3);font-size:11px">${esc(c.note||"")}</span></div>`).join("")
     : `<div style="font-size:11.5px;color:var(--ink-3);text-align:center;padding:10px 0;border:1px dashed var(--line);border-radius:9px">还未添加自定义数据</div>`;
-  const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
+  const on=activeSourceCount();
   const btnText=dataSourcePhase==="topup"?`✓ 追加 ${on} 路数据源并生成内容`:`✓ 确认 ${on} 路数据源，开始抓取`;
+  const banner=kbFindResult
+    ? `<p style="font-size:12px;color:var(--ink-2);margin-bottom:12px;background:var(--q-purple-wash);border-radius:6px;padding:9px 11px;border-left:3px solid var(--q-purple)">
+        📚 <b>来自知识库真实检索</b>（品类：${esc(kbFindResult.cat||'')}）· 可用 <b class="num">${kbFindResult.availableCount||0}</b> 类 · 已启用 <b class="num">${on}</b> 路
+       </p>`
+    : `<p style="font-size:12px;color:var(--ink-2);margin-bottom:12px">当前启用 <b class="num">${on}</b> 路数据源。</p>`;
   $("pvBody").innerHTML=`
-    <p style="font-size:12px;color:var(--ink-2);margin-bottom:12px">${dataSourcePhase==="topup"?"生成前最后追加数据源的机会。已启用的 6 路会跳过重复抓取，只对新增源执行。":"所有数据抓取后先做证据评审，再交给 Bedrock 生成内容。"}当前启用 <b class="num">${on}</b> 路数据源。</p>
+    ${banner}
     ${catBlocks}
     <div style="margin-bottom:12px"><div style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase">自定义补充（可选）</div>
     ${custom}
@@ -1683,10 +1987,85 @@ function renderDataSources(){
       <button class="btn" onclick="confirmDataSources()">${btnText}</button>
     </div>`;
 }
+
+/* 从 kbFindResult 真实数据渲染 · 按 category 分组 */
+function renderKbSourceBlocks(sources){
+  const cats={};
+  sources.forEach(s=>{
+    if(s.status==="not_needed") return; // 不需要的直接隐藏
+    (cats[s.category]=cats[s.category]||[]).push(s);
+  });
+  return Object.entries(cats).map(([cat,arr])=>{
+    const items=arr.map(s=>{
+      const badge=s.status==="available"
+        ? `<span style="font-size:10px;color:var(--a-fg);background:#dcf5e2;border-radius:4px;padding:1px 6px;margin-left:6px">✓ ${s.fileCount} 文件</span>`
+        : s.status==="missing_required"
+        ? `<span style="font-size:10px;color:#fff;background:var(--risk);border-radius:4px;padding:1px 6px;margin-left:6px">⚠ 必需 · 缺失</span>`
+        : `<span style="font-size:10px;color:var(--b-fg);background:var(--q-purple-wash);border-radius:4px;padding:1px 6px;margin-left:6px">💡 建议补充</span>`;
+      const filesBlock=(s.files||[]).length
+        ? `<div style="margin-top:6px;padding-left:6px;border-left:2px solid var(--q-purple-wash)">
+             ${s.files.map(f=>`<div style="font-size:11px;color:var(--ink-3);line-height:1.55">
+               📄 <b style="color:var(--ink-2);font-weight:500">${esc(f.name)}</b>
+               · <span style="color:var(--ink-3)">${esc(f.uploadedAt||'')}</span>
+               ${f.payload?`<br>&nbsp;&nbsp;<span style="color:var(--q-purple-dark)">└ ${esc(f.payload.metric||'')}: <b>${esc(String(f.payload.value||''))}</b>${f.payload.sampleSize?` · 样本 ${f.payload.sampleSize}`:''}</span>`:''}
+             </div>`).join('')}
+           </div>`
+        : '';
+      const uploadBtn=(s.status==="missing_required"||s.status==="missing_suggested")
+        ? `<button class="qr" style="padding:3px 10px;font-size:11px;margin-top:6px;border-color:${s.status==='missing_required'?'var(--risk)':'var(--b-fg)'};color:${s.status==='missing_required'?'var(--risk)':'var(--b-fg)'}" onclick="uploadKbFor('${s.typeKey}','${escAttr(s.name)}')">📎 上传该类文件</button>`
+        : '';
+      const canToggle=s.status==="available"&&!s.required; // available 且非必需可切
+      const switchBtn=s.status==="available"
+        ? `<button class="switch ${s._on?"on":""}" ${s.required?'style="opacity:.6;cursor:default" title="必备"':""} onclick="${canToggle?`toggleKbSource('${s.typeKey}')`:''}" aria-label="开关 ${escAttr(s.name)}"></button>`
+        : `<div style="width:36px;height:20px;border:1px dashed #d0c4e8;border-radius:20px;opacity:.6"></div>`;
+      const opacity=s.status==="available"?(s._on?1:.55):.85;
+      return `<div style="border:1px solid ${s.status==='missing_required'?'#f0b4a0':'var(--line)'};background:${s.status==='missing_required'?'#fcf3ef':'#fff'};border-radius:9px;padding:10px 12px;margin-bottom:6px;opacity:${opacity}">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          ${switchBtn}
+          <div style="flex:1;min-width:0">
+            <b style="font-size:12.5px;color:var(--amz-navy)">${esc(s.name)}${s.required?' <span style="font-size:10px;color:var(--ink-3);font-weight:400">必备</span>':""}${badge}${s.recommend?` <span style="font-size:10px;color:var(--q-purple-dark);background:var(--q-purple-wash);border-radius:4px;padding:1px 6px;margin-left:4px">推荐 · ${esc(s.recommend)}</span>`:""}</b>
+            <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">${esc(s.desc)}</div>
+            ${filesBlock}
+            ${uploadBtn}
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+    return `<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase">${esc(cat)}</div>${items}</div>`;
+  }).join("");
+}
+
+/* 降级：无 kbFindResult 时用老的常量清单 */
+function renderLegacySourceBlocks(){
+  const cats={};
+  DATA_SOURCES.forEach(s=>{cats[s.cat]=cats[s.cat]||[];cats[s.cat].push(s);});
+  return Object.entries(cats).map(([cat,arr])=>{
+    const items=arr.map(s=>`
+      <div style="border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:6px;opacity:${s.on?1:.55}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="switch ${s.on?"on":""}" ${s.locked?'style="opacity:.6;cursor:default"':""} onclick="${s.locked?"":`toggleDataSource('${s.id}')`}" aria-label="开关 ${escAttr(s.name)}"></button>
+          <div style="flex:1;min-width:0">
+            <b style="font-size:12.5px;color:var(--amz-navy)">${esc(s.name)}${s.locked?' <span style="font-size:10px;color:var(--ink-3);font-weight:400">必备</span>':""}${s.recommend?` <span style="font-size:10px;color:var(--q-purple-dark);background:var(--q-purple-wash);border-radius:4px;padding:1px 6px;margin-left:4px">推荐 · ${esc(s.recommend)}</span>`:""}</b>
+            <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">${esc(s.desc)}</div>
+          </div>
+          <span style="font-size:11px;color:var(--ink-3);white-space:nowrap;margin-left:6px">${esc(s.ev)}</span>
+        </div>
+      </div>`).join("");
+    return `<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--ink-3);letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase">${esc(cat)}</div>${items}</div>`;
+  }).join("");
+}
+
 function toggleDataSource(id){
   const s=DATA_SOURCES.find(x=>x.id===id);
   if(!s||s.locked)return;
   s.on=!s.on;
+  renderDataSources();
+}
+function toggleKbSource(typeKey){
+  if(!kbFindResult)return;
+  const s=kbFindResult.sources.find(x=>x.typeKey===typeKey);
+  if(!s||s.status!=="available"||s.required)return;
+  s._on=!s._on;
   renderDataSources();
 }
 function uploadCustomSource(type){
@@ -1699,20 +2078,41 @@ function uploadCustomSource(type){
   renderDataSources();
   toast(`已加入自定义数据源：${templates[type].name}`);
 }
+/* 把 kbFindResult 的 available sources 转换成抓取动画的项 · 每个文件一行 */
+function kbSourcesToScrapeLines(sources){
+  const lines=[];
+  sources.filter(s=>s._on&&s.status==="available").forEach(s=>{
+    (s.files||[]).forEach(f=>{
+      const p=f.payload||{};
+      const summary=p.metric?`${p.metric}: ${p.value}${p.sampleSize?` · 样本 ${p.sampleSize}`:''}`:'已读取';
+      lines.push({
+        title:`从知识库读取 ${f.name}`,
+        detail:summary,
+        typeName:s.name,
+        payload:p,
+        typeKey:s.typeKey,
+      });
+    });
+  });
+  return lines;
+}
+
 async function confirmDataSources(){
   closePreview();
   const phase=dataSourcePhase;
-  const enabled=DATA_SOURCES.filter(s=>s.on);
-  const on=enabled.length+customSources.length;
+  const useKb=!!(kbFindResult&&Array.isArray(kbFindResult.sources));
+  const on=activeSourceCount();
   addMsg("user",phase==="topup"?`追加 ${on} 路数据源并进入内容生成。`:`确认 ${on} 路数据源，开始抓取。`);
 
   if(phase==="topup"){
-    /* 生成前追加：只跑新增的自定义源与新启用的可选源，然后进入生成 */
-    const newOnes=[...customSources.filter(c=>c.fresh),...enabled.filter(s=>s.fresh)];
+    /* 生成前追加：只跑新增的 · 已启用的跳过重复 */
+    const newLegacy=useKb?[]:DATA_SOURCES.filter(s=>s.on&&s.fresh);
+    const newCustom=customSources.filter(c=>c.fresh);
     customSources.forEach(c=>c.fresh=false);
-    enabled.forEach(s=>s.fresh=false);
+    if(!useKb) DATA_SOURCES.forEach(s=>s.fresh=false);
+    const newOnes=[...newCustom,...newLegacy];
     if(newOnes.length){
-      await aiSay(`AgentCore 只抓取新增源，已启用 6 路跳过重复：
+      await aiSay(`AgentCore 只抓取新增源，已启用的跳过重复：
         <div class="prog-card">${newOnes.map((s,i)=>`<div class="prog-line ${i===0?"doing":""}" id="pgT${i}"><span class="st">${i===0?'<span class="spinner"></span>':"○"}</span>${esc(s.name)}</div>`).join("")}</div>`,600);
       for(let i=0;i<newOnes.length;i++){
         await sleep(700);
@@ -1726,8 +2126,54 @@ async function confirmDataSources(){
     return;
   }
 
-  /* 首次配置 · 完整多路抓取动画 */
+  /* 首次配置 · 完整多源抓取动画 */
   setRecSub(2);
+
+  if(useKb){
+    /* 走 kbFindResult · 按每个文件一行显示 */
+    const lines=kbSourcesToScrapeLines(kbFindResult.sources);
+    await aiSay(`Bedrock AgentCore 多源抓取器已启动 · 从知识库真实文件读取（共 <b>${lines.length}</b> 个文件 + ${customSources.length} 个自定义源）：
+      <div class="prog-card" id="progCard">
+        ${lines.map((L,i)=>`<div class="prog-line ${i===0?"doing":""}" id="pgK${i}"><span class="st">${i===0?'<span class="spinner"></span>':"○"}</span>${esc(L.title)}</div>`).join("")}
+        ${customSources.map((c,i)=>`<div class="prog-line" id="pgC${i}"><span class="st">○</span>自定义：${esc(c.name)}</div>`).join("")}
+      </div>`,600);
+    for(let i=0;i<lines.length;i++){
+      await sleep(550);
+      const el=$("pgK"+i);
+      if(el){el.className="prog-line ok";el.innerHTML=`<span class="st">✔</span>${esc(lines[i].title)} · <span style="color:var(--q-purple-dark)">${esc(lines[i].detail)}</span>`;scrollHome();}
+    }
+    for(let i=0;i<customSources.length;i++){
+      await sleep(600);
+      const el=$("pgC"+i);if(el){el.className="prog-line ok";el.innerHTML=`<span class="st">✔</span>自定义：${esc(customSources[i].name)} · 已并入证据表`;scrollHome();}
+      customSources[i].fresh=false;
+    }
+    setRecSub(3);
+    /* 聚合证据数：从 payload 里累加 */
+    const bullets=[];
+    kbFindResult.sources.filter(s=>s._on&&s.status==="available").forEach(s=>{
+      s.files.forEach(f=>{
+        const p=f.payload;
+        if(!p||!p.metric)return;
+        bullets.push(`<li>${esc(s.name)}：<b>${esc(String(p.value||''))}</b> ${esc(p.metric)}${p.sampleSize?` · 样本 ${p.sampleSize}`:''}</li>`);
+      });
+    });
+    const missingReq=kbFindResult.sources.filter(s=>s.status==="missing_required");
+    const missingWarning=missingReq.length
+      ? `<div style="background:#fcf3ef;border-left:3px solid var(--risk);border-radius:6px;padding:8px 11px;margin-top:8px;font-size:11.5px;color:var(--risk)">
+           ⚠ 还有 <b>${missingReq.length}</b> 类必需数据源未上传：${missingReq.map(s=>esc(s.name)).join(' · ')}<br>
+           <span style="color:var(--ink-3);font-weight:400">这会影响生成质量。建议补齐后重跑，或用"取消 · 补充数据后重新查询"回到 Step 1。</span>
+         </div>`
+      : '';
+    await aiSay(`✓ <b>${on}</b> 路数据源抓取完毕并对齐到统一证据表（来自知识库真实文件）：
+      <ul>${bullets.join('')}${customSources.length?`<li>自定义数据 <b>${customSources.length}</b> 项已并入</li>`:''}</ul>
+      ${missingWarning}
+      <p style="margin-top:8px">这些证据决定后续 Bullet / Q&A / Backend Keywords 的写法。请逐条评审 Alexa Follow-up 场景（其余会直接进 Prompt）：</p>
+      <div class="qr-row"><button class="qr" onclick="openScenarioReview()">📋 在右侧评审证据</button></div>`,1100);
+    return;
+  }
+
+  /* 降级路径 · 无知识库结果 · 用老的常量清单 */
+  const enabled=DATA_SOURCES.filter(s=>s.on);
   await aiSay(`Bedrock AgentCore 多源抓取器已启动，演示原型将各路进度快进：
     <div class="prog-card" id="progCard">
       ${enabled.map((s,i)=>`<div class="prog-line ${i===0?"doing":""}" id="pgS${s.id}"><span class="st">${i===0?'<span class="spinner"></span>':"○"}</span>${esc(s.name)}</div>`).join("")}
@@ -1737,7 +2183,6 @@ async function confirmDataSources(){
   for(const s of enabled){
     await sleep(650);
     const el=$("pgS"+s.id);if(el){el.className="prog-line ok";el.innerHTML=`<span class="st">✔</span>${esc(s.name)} · ${esc(ev[s.id]||"")}`;scrollHome();}
-    customSources.forEach(c=>c.fresh=false);
   }
   for(let i=0;i<customSources.length;i++){
     await sleep(600);
@@ -1750,11 +2195,11 @@ async function confirmDataSources(){
   await aiSay(`✓ <b>${on}</b> 路数据源抓取完毕并对齐到统一证据表，共 <b>${7+kwCount+compCount+customSources.length*2}</b> 条候选证据：
     <ul>
       <li>Alexa Follow-up 场景 <b>7</b> 条（按频次）</li>
-      ${kwCount?`<li>高价值搜索词 <b>${kwCount}</b> 个（CVR ≥ 5%，含"apartment range hood"、"ductless range hood"、"30 inch quiet range hood" TOP 3）</li>`:""}
-      ${compCount?`<li>竞品差异化点 <b>${compCount}</b> 条（Broan 独占 "Ultra-Quiet"、COSMO 独占 "Chef-Style"）</li>`:""}
+      ${kwCount?`<li>高价值搜索词 <b>${kwCount}</b> 个（CVR ≥ 5%）</li>`:""}
+      ${compCount?`<li>竞品差异化点 <b>${compCount}</b> 条</li>`:""}
       ${customSources.length?`<li>自定义数据 <b>${customSources.length}</b> 项已并入</li>`:""}
     </ul>
-    <p>这些证据决定后续 Bullet / Q&A / Backend Keywords 的写法。请逐条评审（AI 已在高频、高转化、高差异化上做标注）：</p>
+    <p>请逐条评审（AI 已在高频、高转化、高差异化上做标注）：</p>
     <div class="qr-row"><button class="qr" onclick="openScenarioReview()">📋 在右侧评审证据</button></div>`,1100);
 }
 function scenarioKept(){return Object.values(scenarioDecisions).filter(v=>v).length}
@@ -1780,14 +2225,26 @@ function renderScenarioReview(){
       <div style="font-size:11.5px;color:var(--ink-3);margin-top:5px">30 天频次 <b class="num">${s.freq}%</b> · ${s.note}</div>
     </div>`;
   }).join("");
-  const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
-  const kwOn=DATA_SOURCES.find(s=>s.id==="s4").on;
-  const compOn=DATA_SOURCES.find(s=>s.id==="s7").on;
+  const on=activeSourceCount();
+  const useKb=!!(kbFindResult&&Array.isArray(kbFindResult.sources));
+  let evidenceLine;
+  if(useKb){
+    const parts=[];
+    kbFindResult.sources.filter(s=>s._on&&s.status==="available"&&s.typeKey!=="alexa_followup").forEach(s=>{
+      const total=s.files.reduce((sum,f)=>sum+(Number(f.payload?.value)||0),0);
+      parts.push(`${esc(s.name)} <b>${total||s.files.length}</b>`);
+    });
+    evidenceLine=`Alexa Follow-up 7 条${parts.length?' · '+parts.join(' · '):''}${customSources.length?` · 自定义 ${customSources.length} 项`:""}`;
+  }else{
+    const kwOn=DATA_SOURCES.find(s=>s.id==="s4").on;
+    const compOn=DATA_SOURCES.find(s=>s.id==="s7").on;
+    evidenceLine=`Alexa Follow-up 7 条${kwOn?" · 高价值搜索词 23 个":""}${compOn?" · 竞品差异化 5 条":""}${customSources.length?` · 自定义 ${customSources.length} 项`:""} · Rufus 引用 11 条`;
+  }
   $("pvBody").innerHTML=`
-    <div style="background:var(--amz-blue-wash);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--amz-navy);line-height:1.7">
+    <div style="background:var(--q-purple-wash);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--amz-navy);line-height:1.7">
       <b>📡 多源证据已就位（${on} 路）：</b>
-      Alexa Follow-up 7 条${kwOn?" · 高价值搜索词 23 个":""}${compOn?" · 竞品差异化 5 条":""}${customSources.length?` · 自定义 ${customSources.length} 项`:""} · Rufus 引用 11 条
-      <br><span style="color:var(--ink-3);font-size:11px">下方评审仅针对 Alexa Follow-up；搜索词与竞品差异化点会直接并入 Bedrock 生成 Prompt，不再逐条勾选。</span>
+      ${evidenceLine}
+      <br><span style="color:var(--ink-3);font-size:11px">下方评审仅针对 Alexa Follow-up；其余证据会直接并入 Bedrock 生成 Prompt，不再逐条勾选。</span>
     </div>
     <p style="font-size:12px;color:var(--ink-2);margin-bottom:10px">保留的场景会作为 Bullet Points 与 Q&A 的证据基础。当前保留 <b class="num">${kept}</b> / 7 条。</p>
     ${items}
@@ -1800,7 +2257,7 @@ async function confirmScenarios(){
   const kept=Object.values(scenarioDecisions).filter(v=>v).length;
   closePreview();
   addMsg("user",`确认保留 ${kept} 条场景。`);
-  const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
+  const on=activeSourceCount();
   await aiSay(`✓ 场景集已确认（${kept} 条）。当前证据基础：<b>${on}</b> 路数据源。<br><br>Bedrock 生成即将启动。如果这时突然想到应该再补一路数据源（比如刚拿到的<b>新竞品 ASIN</b>、<b>品牌方最新话术纪要</b>、或者要打开<b>Rufus Community Feedback</b> 抓评论情感），现在是最后机会——补进来会立即并入证据表，然后一起生成。
     <div class="qr-row">
       <button class="qr primary" onclick="toGeneration(${kept})">✓ 证据足够，开始生成</button>
@@ -1815,12 +2272,55 @@ async function toGeneration(kept){
   await runGeneration(kept);
 }
 
-/* ===== Step 2 · 内容生成 ===== */
+/* ===== Step 2 · 内容生成 · 真调 LLM ===== */
+let generatedListing = null;
 async function runGeneration(kept){
   setRecSub(3);
   const asin=ASINS[0];
   const on=DATA_SOURCES.filter(s=>s.on).length+customSources.length;
   const kwOn=DATA_SOURCES.find(s=>s.id==="s4").on;
+
+  // 收集保留的场景
+  const scenarios = SCENARIOS.filter((_,i) => scenarioDecisions[i]).map(s => s.q);
+
+  // 优先真调 LLM 生成
+  if (backendConnected && ACTIVE_MODEL) {
+    await aiSay(`Bedrock（<b>${esc(ACTIVE_MODEL.name)}</b>）生成中 · 证据基础 ${on} 路数据源 · ${kept} 个场景 · 请稍等 30-60s...`, 200);
+    try {
+      const r = await api.generateListing({
+        asin: asinAnswers.asin || asin.asin,
+        model: asinAnswers.model || asin.model,
+        cat: asinAnswers.cat || asin.cat,
+        market: asinAnswers.market || '美国站 (US)',
+        goal: asinAnswers.goal || '',
+        scenarios,
+        competitorInsights: kwOn ? 'Broan 独占 "Ultra-Quiet"、COSMO 独占 "Chef-Style"，我们主打 "Apartment-Friendly + 52dB"' : '',
+      });
+      if (!r.ok) throw new Error(r.error || '生成失败');
+      generatedListing = r;
+      const nameLen = (r.itemName || '').length;
+      const hlLen = (r.highlights || '').length;
+      await aiSay(`✓ 生成完成 · 用 <b>${esc(ACTIVE_MODEL.name)}</b> 真实调用（不是脚本 mock）：
+      <div class="ba-card">
+        <div class="ba-h">${esc(asinAnswers.asin || asin.asin)} · ${esc(asinAnswers.model || asin.model)} · LLM 真生成</div>
+        <div class="ba-b" style="grid-template-columns:1fr">
+          <div class="ba-side after" style="border-right:none">
+            <div class="ba-tag">✓ MODULAR TITLE</div>
+            <b>Item Name (${nameLen}/75)：</b>${esc(r.itemName || '')}<br><br>
+            <b>Highlights (${hlLen}/125)：</b>${esc(r.highlights || '')}
+            <small style="margin-top:10px"><b>Bullets ×${(r.bullets||[]).length}：</b><br>${(r.bullets||[]).map(b => '• ' + esc(b)).join('<br>')}</small>
+            <small><b>Q&A ×${(r.qa||[]).length}</b> · <b>Backend Keywords：</b>${(r.backendKeywords||'').length} bytes · <b>A+ 骨架</b>：${esc((r.aplusOutline||'').slice(0,80))}${(r.aplusOutline||'').length > 80 ? '...' : ''}</small>
+          </div>
+        </div>
+      </div>
+      <div class="qr-row"><button class="qr primary" onclick="toScoring()">进入 Step 3 · AI 评分</button></div>`, 300);
+      return;
+    } catch(e) {
+      await aiSay(`<span style="color:var(--risk)">LLM 生成失败：${esc(e.message)}</span> · 降级到脚本 mock 展示：`, 300);
+    }
+  }
+
+  // Fallback：老的脚本化 Before/After 展示
   await aiSay(`内容生成完成。证据基础：<b>${on}</b> 路数据源、场景 ${kept} 条${kwOn?"、高价值搜索词 23 个已植入 Backend Keywords 与 Bullets":""}${customSources.length?`、自定义数据 ${customSources.length} 项`:""}已全部纳入。这是 <b>Before / After</b> 对比：
     <div class="ba-card">
       <div class="ba-h">${esc(asin.asin)} · ${esc(asin.model)} · Modular Title 拆分</div>
@@ -1941,10 +2441,50 @@ function scoreBreakdownHTML(asin){
 async function toScoring(){
   addMsg("user","进入 AI 评分。");
   setRecStep(3);
+  const asin=ASINS[0];
+
+  // 真实 LLM 评分（如果 Step 2 生成了内容且模型已联通）
+  if (backendConnected && ACTIVE_MODEL && generatedListing) {
+    await aiSay(`AgentCore Evaluations 用 <b>${esc(ACTIVE_MODEL.name)}</b> 作 LLM-as-Judge，8 维度加权评分中…`, 300);
+    try {
+      const r = await api.scoreListing(generatedListing);
+      if (!r.ok) throw new Error(r.error || '评分失败');
+      setRecSub(1);
+      const scoredAsin = { asin: asinAnswers.asin || asin.asin, score: r.total, dims: r.dims };
+      // LLM 返回的人工任务覆盖硬编码
+      if (r.humanTodos && r.humanTodos.length) {
+        HUMAN_TODOS.length = 0;
+        r.humanTodos.forEach((t, i) => HUMAN_TODOS.push({
+          id: 'todo_' + i, dim: t.dim || '', title: t.title || '',
+          issue: t.issue || '', advice: t.advice || '', impact: t.impact || '',
+          owner: t.owner || '设计团队', eta: t.eta || '3 个工作日', cost: t.cost || null,
+        }));
+        Object.keys(todoStates).forEach(k => delete todoStates[k]);
+        HUMAN_TODOS.forEach(t => todoStates[t.id] = 'pending');
+      }
+      const strengthsHtml = (r.strengths || []).map(s => `<li>${esc(s)}</li>`).join('');
+      await aiSay(`评分完成：<b>${r.total}/100 ${r.total>=80?'✓ 已达 ≥80 阈值':r.total>=65?'⚠ B 级 · 建议先做人工优化':'✗ C 级 · 需回炉'}</b> · Grade <b>${r.grade || '?'}</b> · <b>${esc(ACTIVE_MODEL.name)}</b> 真实判分。
+        <p style="font-size:12px;color:var(--ink-2);margin-top:6px">${esc(r.why || '')}</p>
+        ${strengthsHtml ? `<p style="font-size:12px;color:var(--ink-2);margin-top:6px"><b>优势：</b><ul style="margin:4px 0">${strengthsHtml}</ul></p>` : ''}
+        ${scoreBreakdownHTML(scoredAsin)}
+        <p style="font-size:12.5px;color:var(--ink-2);margin-top:10px"><b>LLM 分析出的 ${HUMAN_TODOS.length} 项人工跟进事项</b>（AI 无法自动完成 · 需人工协作）：</p>
+        <div id="todoCard">${renderTodoCard()}</div>
+        <div class="qr-row" style="margin-top:12px">
+          <button class="qr primary" onclick="assignAllTodos()">📤 一键指派全部</button>
+          <button class="qr" onclick="saveProject('afterScore')">💾 保存到项目</button>
+          <button class="qr" onclick="toABTest()">🧪 直接进 A/B</button>
+          <button class="qr ghost" onclick="openWeightPanel()">⚖️ 调整权重</button>
+        </div>`, 400);
+      return;
+    } catch(e) {
+      await aiSay(`<span style="color:var(--risk)">LLM 评分失败：${esc(e.message)}</span> · 降级到脚本演示：`, 200);
+    }
+  }
+
+  // Fallback · 脚本化演示
   await aiSay(`调用 AgentCore Evaluations 做 LLM-as-Judge 打分，8 维度加权计算 AI-Ready Score …`,600);
   await sleep(1200);
   setRecSub(1);
-  const asin=ASINS[0];
   await aiSay(`评分完成：<b>${asin.score}/100 ✓ 已达 ≥80 阈值</b>，符合入项目条件。相比原始基线 39/100，主要在 <b>场景化（+8）· AI 语义（+6）· GEO（+8）</b> 三个维度获得提升。
     ${scoreBreakdownHTML(asin)}
     <p style="font-size:12.5px;color:var(--ink-2);margin-top:10px">AI 生成的文本部分已达标。但 <b>视觉 7/12</b> 和 <b>A+ 8/10</b> 还有分数空间——<b>这些 AI 无法自动完成</b>（需要设计师、摄影、内容团队做具体产出）。我列了一份人工跟进清单，你可以选择：<b>指派后再跑 A/B</b>（分数更高，起跑线更好），或者<b>先直接进项目/A/B</b>（快速验证再补）。</p>
@@ -2118,6 +2658,7 @@ async function startListingWithAsin(asinKey){
   if(!profile){toast("演示原型：该 ASIN 未预置画像");return;}
   addMsg("user",`基于对比分析，优化 ${asinKey}`);
   closePreview();
+  resetKbFindResult();
   recChatActive=true;
   setRecStep(1);
   asinAnswers={asin:profile.asin,cat:profile.cat,model:profile.model,market:profile.market,goal:profile.goal};
@@ -2139,6 +2680,18 @@ function starsHTML(v){const f=Math.floor(v),h=v-f>=.5;return "★".repeat(f)+(h?
 
 async function startCompareAsins(){
   addMsg("user","对比 B08GK4VPMR、B08GK4S8LK、竞品 B0BXK6L2VP");
+
+  // 若模型联通 · 用 LLM 生成真实洞察，替代硬编码的 3 条结论
+  let llmInsights = null;
+  if (backendConnected && ACTIVE_MODEL) {
+    const t = addMsg("ai", `<span class="typing"><i></i><i></i><i></i></span> <span style="font-size:11.5px;color:var(--ink-3)">用 <b>${esc(ACTIVE_MODEL.name)}</b> 做对比分析…</span>`);
+    try {
+      const r = await api.compareAsins(CMP_ASINS);
+      if (r.ok) llmInsights = r;
+    } catch(e){ console.warn('[Compare] LLM failed', e.message); }
+    t.parentElement.remove(); saveRecChat();
+  }
+
   await aiSay(`已抓取 3 个 ASIN 的实时买家页面数据（价格 · Prime · 评分 · Buy Box · Highlights）并对齐到统一维度。<b>右侧同步渲染真实购物界面</b>——评分星星、价格、Buy Box 按钮都按 Amazon 实际布局，可直接感知用户视角。
     <div class="result-card">
       <div class="rc-h"><div class="rc-ic">⚖️</div><div><b>3 ASIN 对比分析</b><span>2 个自家 COMFEE · 1 个 Broan 竞品</span></div><span class="rc-badge pass">数据同步</span></div>
@@ -2157,12 +2710,17 @@ async function startCompareAsins(){
         </tbody>
       </table>
     </div>
-    <p style="margin-top:10px"><b>💡 关键洞察</b>：</p>
-    <ul>
-      <li><b>Broan 单价 +47%</b>，但 AI-Ready 反低 4pp、Alexa 命中率低 8pp——价格优势可作为 COMFEE 核心卖点强化，A+ Content 明确对比。</li>
-      <li><b>Broan 评论量 3× 领先</b>（8,241 vs 2,847）· 社交信号是最大短板，建议加大 A+ 视频与 Vine 计划投入积累评论。</li>
-      <li>COMFEE 30" vs 36" 定位清晰（apartment vs open-plan），但<b>主图相似度 62%</b>——建议 36" 换生活场景图强化差异化。</li>
-    </ul>
+    ${llmInsights && llmInsights.insights && llmInsights.insights.length ? `
+      <p style="margin-top:10px"><b>💡 关键洞察</b> <span style="font-size:10.5px;background:var(--q-purple-wash);color:var(--q-purple-dark);padding:1px 6px;border-radius:3px">${esc(ACTIVE_MODEL?.name || 'LLM')} 真实分析</span>：</p>
+      <ul>${llmInsights.insights.map(i => `<li><b>${esc(i.tag || '')}：</b>${esc(i.body || '')}</li>`).join('')}</ul>
+    ` : `
+      <p style="margin-top:10px"><b>💡 关键洞察</b>（脚本 mock · 联通模型后会用 LLM 分析）：</p>
+      <ul>
+        <li><b>Broan 单价 +47%</b>，但 AI-Ready 反低 4pp、Alexa 命中率低 8pp——价格优势可作为 COMFEE 核心卖点强化。</li>
+        <li><b>Broan 评论量 3× 领先</b>（8,241 vs 2,847）· 社交信号是最大短板，建议加大 A+ 视频与 Vine 计划。</li>
+        <li>COMFEE 30" vs 36" 定位清晰但<b>主图相似度 62%</b>——建议 36" 换生活场景图强化差异化。</li>
+      </ul>
+    `}
     <div style="margin-top:14px;padding:11px 13px;background:var(--q-purple-wash);border-radius:8px;border-left:3px solid var(--q-purple)">
       <p style="font-size:12.5px;color:var(--q-purple-dark);font-weight:600;margin-bottom:8px">🚀 基于以上洞察，建议进入 Listing 优化：</p>
       <div class="qr-row">

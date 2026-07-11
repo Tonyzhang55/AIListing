@@ -9,6 +9,7 @@ const path = require('path');
 const routes = require('./routes');
 const providersModule = require('./providers');
 const chatRouter = require('./chat');
+const aiRoutes = require('./ai-routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,9 +28,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// API · 顺序：先挂 chat / providers（覆盖 routes.js 里的旧 /chat mock）
+// API · 顺序：先挂 chat / providers / ai-routes（覆盖 routes.js 里的旧 mock）
 app.use('/api/providers', providersModule.router);
 app.use('/api/chat', chatRouter);
+app.use('/api/ai', aiRoutes);
 app.use('/api', routes);
 
 // 前端静态资源 · dev 阶段禁 cache，避免 index.html 改动没生效
