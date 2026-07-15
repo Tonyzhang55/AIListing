@@ -2723,12 +2723,14 @@ async function runRealAsinCompare(){
   }
 
   // 把 asin-lookup 结果转成 compare card 需要的形状
-  realCompareData = results.map((r, idx) => {
+  // 自家品牌识别：COMFEE / Midea / 美的 · 大小写和撇号不敏感（客户旗下品牌可在此扩充）
+  const isOwnBrand = (b) => /^(comfee|midea|美的)/i.test(String(b||'').replace(/['\s']/g,'').trim());
+  realCompareData = results.map((r) => {
     if (!r.ok) return null; // 让 render 显示占位
     return {
       asin: r.asin,
       brand: r.brand || '未知',
-      own: idx < asins.length - 1, // 前两个默认标为自家 · 最后一个为竞品（可以后续让用户切换）
+      own: isOwnBrand(r.brand),
       imageUrl: r.imageUrl,
       title: r.title,
       price: r.priceNum,
