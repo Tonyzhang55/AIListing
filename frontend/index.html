@@ -2120,7 +2120,7 @@ async function confirmDataSources(){
       }
     }
     setRecStep(2);setRecSub(1);
-    await aiSay(`证据表已刷新，共 <b class="num">${on}</b> 路数据源支撑。Bedrock（Claude Sonnet 4）开始生成 Modular Title / Bullets / Q&A / A+ 骨架 / Backend Keywords…`,900);
+    await aiSay(`证据表已刷新，共 <b class="num">${on}</b> 路数据源支撑。${bedrockLabel()} 开始生成 Modular Title / Bullets / Q&A / A+ 骨架 / Backend Keywords…`,900);
     await sleep(1500);
     await runGeneration(scenarioKept());
     return;
@@ -2267,7 +2267,7 @@ async function confirmScenarios(){
 async function toGeneration(kept){
   addMsg("user","证据足够，开始生成。");
   setRecStep(2);setRecSub(1);
-  await aiSay(`Bedrock（Claude Sonnet 4）生成 Modular Title / Bullets / Q&A / A+ 骨架 / Backend Keywords 中…`,700);
+  await aiSay(`${bedrockLabel()} 生成 Modular Title / Bullets / Q&A / A+ 骨架 / Backend Keywords 中…`,700);
   await sleep(1500);
   await runGeneration(kept);
 }
@@ -3075,7 +3075,23 @@ function openAsin(id){
   $("siteOverlay").classList.add("open");
 }
 function startABForAsin(asin){
-  toast(`已为 ${asin} 启动 A/B 测试 · 预计 07-22 结算 · 结果会推送到 Feeds`);
+  // 更新数据 · 状态改 ab · 让表格立即反映
+  const target = ASINS.find(a => a.asin === asin);
+  if (target) {
+    target.status = 'ab';
+    target.risk = 'A/B 测试中 · Day 0/14';
+    renderTable();
+    setTimeout(() => {
+      const rows = document.querySelectorAll('#tblWrap tbody tr');
+      const idx = ASINS.findIndex(a => a.asin === asin);
+      if (idx >= 0 && rows[idx]) {
+        rows[idx].style.transition = 'background-color 0.5s';
+        rows[idx].style.backgroundColor = '#e5d9f6';
+        setTimeout(() => { rows[idx].style.backgroundColor = ''; }, 1600);
+      }
+    }, 100);
+  }
+  toast(`已为 ${asin} 启动 A/B · 状态已切到「A/B 中」· 预计 07-22 结算`);
   pushFeed("🧪 A/B 已启动",`${asin} · 目标每组 5,000 sessions · 14 天后自动判定`);
 }
 function openResearch(){$("resOverlay").classList.add("open")}
@@ -3162,7 +3178,27 @@ async function wsStartAB(){
 }
 async function wsAcceptStartAB(){
   wsMsg("user","确认，启动。");
-  await wsAi(`✔ B08YXK3M2P 的 A/B 已启动 · 结算日 <b>07-22</b>。状态列已同步更新为「A/B 中」，结果显著后自动进入项目正式版本；未通过会自动回退到当前 Listing。可以关闭这个对话，进度会通过 Feeds 推送。`);
+
+  // 真正更新状态 · 让左侧表格立即反映
+  const target = ASINS.find(a => a.asin === 'B08YXK3M2P');
+  if (target) {
+    target.status = 'ab';
+    target.risk = 'A/B 测试中 · Day 0/14';
+    // A/B 刚启动没有数据 · 保持 ab: null，CVR/CTR 列继续显示 —
+    renderTable();
+    // 简短高亮该行以引导视线
+    setTimeout(() => {
+      const rows = document.querySelectorAll('#tblWrap tbody tr');
+      const idx = ASINS.findIndex(a => a.asin === 'B08YXK3M2P');
+      if (idx >= 0 && rows[idx]) {
+        rows[idx].style.transition = 'background-color 0.5s';
+        rows[idx].style.backgroundColor = '#e5d9f6';
+        setTimeout(() => { rows[idx].style.backgroundColor = ''; }, 1600);
+      }
+    }, 100);
+  }
+
+  await wsAi(`✔ B08YXK3M2P 的 A/B 已启动 · 结算日 <b>07-22</b>。左侧表格状态列已同步为「<span class="status-pill-sm sp-ab">● A/B 中</span>」· 风险列改为「A/B 测试中 · Day 0/14」。结果显著后自动进入项目正式版本；未通过会自动回退到当前 Listing。进度会通过 Feeds 推送。`);
   pushFeed("🧪 A/B 已启动","B08YXK3M2P · CVU30L2W · 结算日 07-22 · CVR 显著提升自动上线");
 }
 
@@ -3355,6 +3391,11 @@ async function renderKb(){
 let PROVIDER_DEFS = [];      // /api/providers 返回
 let PROVIDER_STATUS = {};    // 每个 provider 是否已配置
 let ACTIVE_MODEL = null;     // {provider, modelId, name}
+/* 显示"Bedrock（<model name>）"标签 · 联通后端且有 activeModel 时用真实名，否则占位 */
+function bedrockLabel(){
+  if (backendConnected && ACTIVE_MODEL) return `Bedrock（<b>${esc(ACTIVE_MODEL.name)}</b>）`;
+  return '大模型（未联通 · 走脚本 mock）';
+}
 let curPvTab = 'bedrock';
 
 async function loadProviderState(){
