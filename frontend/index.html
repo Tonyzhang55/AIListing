@@ -864,7 +864,7 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
                 </button>
               </div>
               <div class="sugg-row">
-                <button class="chip" onclick="startCompareAsins()">⚖️ 对比 B08GK4VPMR、B08GK4S8LK、竞品 B0BXK6L2VP</button>
+                <button class="chip" onclick="startCompareAsins()">⚖️ 对比 3 个真实 Range Hood ASIN（AMZCHEF / COMFEE / Hermitlux）</button>
                 <button class="chip" onclick="askGeneral()">Alexa 上 "range hood for apartment" 场景谁在赢？</button>
                 <button class="chip" onclick="toast('演示原型：该问答路径未编入脚本，请点击其他入口')">Broan 上周更新了哪些 AI 相关字段？</button>
                 <button class="chip" onclick="toast('演示原型：该问答路径未编入脚本，请点击其他入口')">给我这个月 COMFEE 的 Alexa Share of Voice</button>
@@ -2682,27 +2682,26 @@ function starsHTML(v){const f=Math.floor(v),h=v-f>=.5;return "★".repeat(f)+(h?
 let realCompareData = null;
 
 /* 用户输入 3 个真实 ASIN · 后端并发 fetch */
-async function promptRealAsinCompare(){
+async function promptRealAsinCompare(autoFillDefaults){
+  const defaults = autoFillDefaults ? ['B0BG5W26RD','B09V7287P5','B08XXN3TYG'] : ['','',''];
   const html = `
     <div style="padding:14px 16px;background:var(--q-purple-wash);border-radius:9px;margin:6px 0">
       <b>输入 3 个真实 ASIN · 从 amazon.com 抓实时数据</b>
       <p style="font-size:11.5px;color:var(--ink-3);margin:5px 0 8px">价格 / 主图 / 评分 / 评论数 / Prime · 全部真实</p>
-      ${[1,2,3].map(i=>`<div style="margin-bottom:6px"><input type="text" id="ra${i}" placeholder="ASIN ${i} · B0 开头 10 位" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-family:monospace;font-size:12px"></div>`).join('')}
+      ${[1,2,3].map(i=>`<div style="margin-bottom:6px"><input type="text" id="ra${i}" value="${defaults[i-1]}" placeholder="ASIN ${i} · B0 开头 10 位" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-family:monospace;font-size:12px"></div>`).join('')}
       <div class="qr-row" style="margin-top:8px">
         <button class="qr primary" onclick="runRealAsinCompare()">🌐 抓取 amazon.com 并对比</button>
-        <button class="qr" onclick="fillDemoAsins()">用示例 ASIN（Instant Pot / Ninja / COMFEE）</button>
+        <button class="qr" onclick="fillDemoAsins()">用 Range Hood 示例 ASIN</button>
       </div>
     </div>`;
   await aiSay(html);
 }
 
 function fillDemoAsins(){
-  // 已在 amazon.com 验证真实存在的示例 ASIN · 用户可以随时改成自己的
-  const demo = ['B00FLYWNYQ', 'B075CYMYK6', ''];
+  // 3 个真实 Range Hood ASIN · 已在 amazon.com 验证存在（AMZCHEF / COMFEE / Hermitlux）
+  const demo = ['B0BG5W26RD', 'B09V7287P5', 'B08XXN3TYG'];
   demo.forEach((a,i)=>{const el=$("ra"+(i+1)); if(el) el.value=a;});
-  const s3 = $("ra3");
-  if (s3){ s3.placeholder = '第 3 个 ASIN · 比如你要对比的竞品 · 可留空只对比前 2 个'; s3.focus(); }
-  toast('已填入 2 个真实 Instant Pot ASIN · 第 3 个可以填你想对比的竞品，或直接点抓取');
+  toast('已填入 3 个真实 Range Hood ASIN · AMZCHEF · COMFEE · Hermitlux');
 }
 
 async function runRealAsinCompare(){
@@ -2793,16 +2792,15 @@ async function renderRealCompareResult(llmInsights){
 }
 
 async function startCompareAsins(){
-  addMsg("user","对比 B08GK4VPMR、B08GK4S8LK、竞品 B0BXK6L2VP");
+  addMsg("user","对比 3 个真实 Range Hood ASIN");
   realCompareData = null; // 走 mock 路径 · 清空真实数据
 
   // 联通后端时提供切换到真实对比的入口
   if (backendConnected) {
-    await aiSay(`默认展示的是 <b>预置演示数据</b>（COMFEE + Broan 系列 · 价格评分为脚本 mock）。
-      <br>如果需要看真实 Amazon 数据，可以切到"真实对比"模式 · 输入任意 3 个 ASIN，后端并发抓 amazon.com 拿实时价格 / 主图 / 评分。
+    await aiSay(`我可以从 amazon.com 抓 3 个 ASIN 的实时数据（图片 / 价格 / 评分 / 评论数）对比 · 也可以看预置演示数据。
       <div class="qr-row">
-        <button class="qr primary" onclick="promptRealAsinCompare()">🌐 用真实 ASIN 对比（从 amazon.com 抓）</button>
-        <button class="qr" onclick="continueMockCompare()">继续看演示数据</button>
+        <button class="qr primary" onclick="promptRealAsinCompare(true)">🌐 抓真实 Range Hood 3 ASIN 对比</button>
+        <button class="qr" onclick="continueMockCompare()">继续看演示数据（COMFEE + Broan mock）</button>
       </div>`, 200);
     return;
   }
@@ -2900,9 +2898,11 @@ function renderAmzCard(a, useReal){
     ? (isOwn ? `${esc((a.brand||'自家').slice(0,12))} · 自家` : `${esc((a.brand||'竞品').slice(0,12))} · 竞品`)
     : (isOwn ? "COMFEE · 自家" : "Broan · 竞品");
 
-  // 图片 · 真实时用 <img src>，mock 时用 emoji
+  // 图片 · 真实时用 <img src>，mock 时用 emoji · 固定容器高度避免撑破卡片
   const imgHtml = useReal && a.imageUrl
-    ? `<img src="${esc(a.imageUrl)}" alt="${esc((a.title||'').slice(0,60))}" style="max-width:100%;max-height:180px;object-fit:contain;background:#fff" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'📦',style:'font-size:60px;line-height:180px'}))">`
+    ? `<div style="height:120px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden">
+         <img src="${esc(a.imageUrl)}" alt="${esc((a.title||'').slice(0,60))}" style="max-width:100%;max-height:100%;object-fit:contain;display:block" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'📦',style:'font-size:40px'}))">
+       </div>`
     : (a.img || '📦');
 
   const stars = a.stars || 0;
@@ -2915,8 +2915,8 @@ function renderAmzCard(a, useReal){
   return `
     <div class="amz-product ${isOwn?"own":"comp"}">
       <div class="amz-product-label">${label}</div>
-      <div class="amz-img" style="${useReal?'padding:12px;background:#fff':''}">${imgHtml}
-        <div class="amz-badges">${a.prime?'<span class="amz-badge prime">prime</span>':""}${a.deal?'<span class="amz-badge deal">Lightning Deal</span>':""}</div>
+      <div class="amz-img" style="${useReal?'padding:0;background:#fff;position:relative':''}">${imgHtml}
+        <div class="amz-badges" style="${useReal?'position:absolute;top:6px;left:6px;z-index:2':''}">${a.prime?'<span class="amz-badge prime">prime</span>':""}${a.deal?'<span class="amz-badge deal">Lightning Deal</span>':""}</div>
       </div>
       <div class="amz-body">
         <div class="amz-title">${esc(a.title||'')}</div>

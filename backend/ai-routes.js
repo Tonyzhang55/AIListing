@@ -286,8 +286,15 @@ router.post('/asin-lookup', async (req, res) => {
     if (!r.ok) throw new Error(`Amazon 返回 HTTP ${r.status}（该 ASIN 可能不存在或不在此站点售卖）`);
     const html = await r.text();
 
+    // HTML 实体解码 · Amazon 页面里 &#39; / &amp; / &quot; / &#34; 需要还原
+    const decodeEntities = (s) => (s || '')
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&'); // amp 放最后避免二次解码
     // 简单 regex 抽核心字段（Amazon HTML 结构相对稳定）
-    const pick = (re) => (html.match(re)?.[1] || '').replace(/\s+/g, ' ').trim();
+    const pick = (re) => decodeEntities((html.match(re)?.[1] || '').replace(/\s+/g, ' ').trim());
     const title = pick(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/i);
     const brand = pick(/<tr class="po-brand"[\s\S]{0,300}?<span[^>]*class="[^"]*po-break-word[^"]*"[^>]*>\s*([^<]+?)\s*<\/span>/i)
                || pick(/<a id="bylineInfo"[^>]*>\s*(?:Visit the |Brand:\s*)?([^<]+?)(?:\s+Store)?\s*<\/a>/i);
@@ -299,9 +306,9 @@ router.post('/asin-lookup', async (req, res) => {
     const priceRaw = (buyBox.match(/<span class="a-offscreen">\s*(\$[\d.,]+)\s*<\/span>/i)?.[1]
                    || pick(/<span class="a-price[^"]*"[^>]*>\s*<span class="a-offscreen">\s*(\$[\d.,]+)\s*<\/span>/i)
                    || '').replace(/\s+/g, ' ').trim();
-    const featureBullets = [...html.matchAll(/<span class="a-list-item[^"]*"[^>]*>\s*([^<]{20,300}?)\s*<\/span>/gi)].slice(0, 5).map(m => m[1].trim());
+    const featureBullets = [...html.matchAll(/<span class="a-list-item[^"]*"[^>]*>\s*([^<]{20,300}?)\s*<\/span>/gi)].slice(0, 5).map(m => decodeEntities(m[1].trim()));
     const bcHtml = html.match(/id="wayfinding-breadcrumbs_feature_div"[\s\S]{0,3000}?<\/ul>/i)?.[0] || '';
-    const breadcrumb = [...bcHtml.matchAll(/<a[^>]*class="[^"]*a-link-normal[^"]*"[^>]*>\s*([^<]+?)\s*<\/a>/g)].map(m => m[1].trim());
+    const breadcrumb = [...bcHtml.matchAll(/<a[^>]*class="[^"]*a-link-normal[^"]*"[^>]*>\s*([^<]+?)\s*<\/a>/g)].map(m => decodeEntities(m[1].trim()));
 
     // ---- 新增：图片 / 评分 / 评论数 / Prime / 优惠 / 送达时间 ----
     // 主图 · Amazon 用 data-a-dynamic-image JSON 或 hi-res 属性
