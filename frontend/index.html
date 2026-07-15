@@ -826,6 +826,12 @@ input[type=checkbox]{accent-color:var(--amz-orange);width:14px;height:14px}
           <li id="rstep3"><span class="rs-dot">3</span><span class="rs-label">AI 评分<br><span style="font-size:10px;color:var(--a-fg);font-weight:600">入项目门槛</span><ul class="rs-subs" id="rsubs3"></ul></span></li>
           <li id="rstep4"><span class="rs-dot">4</span><span class="rs-label">A/B 测试<br><span style="font-size:10px;color:var(--ink-3);font-weight:400">可选 · 优化中或入项目后</span><ul class="rs-subs" id="rsubs4"></ul></span></li>
         </ol>
+        <!-- 当前正在优化的 ASIN 快照 · 未开始时为空态 -->
+        <div id="currentOptPanel" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">
+          <div class="rs-title" style="margin-bottom:10px">当前优化的 ASIN</div>
+          <div id="currentOptBody"></div>
+        </div>
+
         <div style="margin-top:20px;padding-top:14px;border-top:1px dashed var(--line)">
           <div class="rs-title" style="margin-bottom:10px">项目层 · 持续运行</div>
           <div style="font-size:12px;color:var(--ink-2);padding:5px 0;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:var(--a-fg);flex:none"></span>Citation 监控</div>
@@ -1703,7 +1709,7 @@ const ASIN_FIELDS = [
 let asinAnswers={}, asinFieldIdx=-1;
 
 /* 开新 Listing 时清空之前的知识库检索结果 · 避免旧品类污染新 ASIN */
-function resetKbFindResult(){ kbFindResult=null; customSources=[]; }
+function resetKbFindResult(){ kbFindResult=null; customSources=[]; currentOptListing=null; renderCurrentOpt(); }
 async function startListing(){
   resetKbFindResult();
   recChatActive=true;
@@ -1749,6 +1755,20 @@ async function handleAsinInput(raw){
     asinAnswers.title = r.title || '';
     asinAnswers.price = r.price || '';
     asinAnswers.goal = r.suggestedGoal || '';
+
+    // 同步到侧边栏「当前优化 ASIN」面板
+    currentOptListing = {
+      asin: r.asin,
+      brand: r.brand || '',
+      title: r.title || '',
+      price: r.priceNum || null,
+      imageUrl: r.imageUrl || '',
+      stars: r.stars || null,
+      reviews: r.reviews || null,
+      prime: !!r.prime,
+      score: null, grade: null, dims: null, // Step 3 后填
+    };
+    renderCurrentOpt();
     const llmTag = r.llmEnriched
       ? `<span style="font-size:10px;background:var(--q-purple-wash);color:var(--q-purple-dark);padding:1px 6px;border-radius:3px">LLM 结构化</span>`
       : `<span style="font-size:10px;background:var(--bg);color:var(--ink-3);padding:1px 6px;border-radius:3px">仅 HTML 抽取</span>`;
@@ -1809,6 +1829,52 @@ async function showAsinCard(){
       <span style="font-size:11.5px;color:var(--ink-3)">画像会保存到项目，可在“我的项目”里回溯</span>
     </div>
   </div>`,700);
+}
+
+/* ===== 当前正在优化的 ASIN · 全局快照 ===== */
+/* 生命周期：resetKbFindResult 清空 · handleAsinInput 填充 amazon 抓取字段 · runScoring 完成后写入分数 */
+let currentOptListing = null;
+
+function renderCurrentOpt(){
+  const el = $("currentOptBody");
+  if (!el) return;
+  const c = currentOptListing;
+  if (!c || !c.asin) {
+    el.innerHTML = `
+      <div style="padding:16px 12px;border:1px dashed var(--line);border-radius:9px;text-align:center;font-size:11.5px;color:var(--ink-3);line-height:1.7">
+        尚未选择 ASIN<br>
+        <span style="color:var(--ink-3)">从上面的入口开始优化流程 · ASIN 画像抓取后会在这里显示实时买家界面</span>
+      </div>`;
+    return;
+  }
+  const stars = c.stars || 0;
+  const starHtml = stars ? '★'.repeat(Math.floor(stars)) + (stars-Math.floor(stars)>=0.5?'½':'') : '';
+  const scoreBlock = c.score != null
+    ? `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 10px;background:var(--q-purple-wash);border-radius:7px;border-left:3px solid var(--q-purple)">
+         <div style="flex:1;min-width:0">
+           <div style="font-size:10.5px;color:var(--ink-3);letter-spacing:.03em">AI-Ready Score</div>
+           <div><b style="font-size:20px;color:var(--q-purple-dark)">${c.score}</b><span style="font-size:11px;color:var(--ink-3)">/100</span> ${c.grade?`<span class="status-pill-sm ${c.grade==='A'?'sp-live':c.grade==='B'?'sp-ab':'sp-fail'}" style="font-size:10px;margin-left:4px">Grade ${esc(c.grade)}</span>`:''}</div>
+         </div>
+       </div>`
+    : `<div style="margin-top:8px;padding:8px 10px;background:#fafafa;border-radius:7px;font-size:11px;color:var(--ink-3);text-align:center">AI 评分待生成 · Step 3 完成后自动显示</div>`;
+  el.innerHTML = `
+    <div style="border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff">
+      ${c.imageUrl
+        ? `<div style="height:100px;display:flex;align-items:center;justify-content:center;background:#fff;border-bottom:1px solid var(--line);padding:6px;position:relative">
+             <img src="${esc(c.imageUrl)}" alt="${esc((c.title||'').slice(0,50))}" style="max-width:100%;max-height:100%;object-fit:contain" loading="lazy" onerror="this.style.display='none'">
+             ${c.prime?'<span class="amz-badge prime" style="position:absolute;top:4px;left:4px">prime</span>':''}
+           </div>`
+        : `<div style="height:60px;display:flex;align-items:center;justify-content:center;background:#fafafa;color:var(--ink-3);font-size:11px;border-bottom:1px solid var(--line)">图片抓取中 / 无</div>`}
+      <div style="padding:10px 11px">
+        <div style="font-size:11.5px;color:var(--ink-2);line-height:1.45;max-height:52px;overflow:hidden;font-weight:500">${esc((c.title || c.asin || '').slice(0,90))}</div>
+        <div style="font-size:10.5px;color:var(--ink-3);margin-top:4px;font-family:monospace">${esc(c.asin)} · ${esc((c.brand||'').slice(0,15))}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+          ${c.price?`<span style="font-weight:700;color:var(--amz-navy);font-size:13px">$${Number(c.price).toFixed(2)}</span>`:''}
+          ${stars?`<span style="font-size:10.5px;color:#f59e0b">${starHtml}</span><span style="font-size:10.5px;color:var(--ink-3)">${stars} · ${(c.reviews||0).toLocaleString()}</span>`:''}
+        </div>
+        ${scoreBlock}
+      </div>
+    </div>`;
 }
 
 /* ===== Step 1 · 数据源确认 · 从知识库查真实数据 ===== */
@@ -2451,6 +2517,13 @@ async function toScoring(){
       if (!r.ok) throw new Error(r.error || '评分失败');
       setRecSub(1);
       const scoredAsin = { asin: asinAnswers.asin || asin.asin, score: r.total, dims: r.dims };
+      // 更新侧边栏面板 · 显示分数
+      if (currentOptListing) {
+        currentOptListing.score = r.total;
+        currentOptListing.grade = r.grade || null;
+        currentOptListing.dims = r.dims || null;
+        renderCurrentOpt();
+      }
       // LLM 返回的人工任务覆盖硬编码
       if (r.humanTodos && r.humanTodos.length) {
         HUMAN_TODOS.length = 0;
@@ -2485,6 +2558,13 @@ async function toScoring(){
   await aiSay(`调用 AgentCore Evaluations 做 LLM-as-Judge 打分，8 维度加权计算 AI-Ready Score …`,600);
   await sleep(1200);
   setRecSub(1);
+  // 侧边栏面板同步 mock 评分
+  if (currentOptListing) {
+    currentOptListing.score = asin.score;
+    currentOptListing.grade = asin.grade || 'A';
+    currentOptListing.dims = asin.dims;
+    renderCurrentOpt();
+  }
   await aiSay(`评分完成：<b>${asin.score}/100 ✓ 已达 ≥80 阈值</b>，符合入项目条件。相比原始基线 39/100，主要在 <b>场景化（+8）· AI 语义（+6）· GEO（+8）</b> 三个维度获得提升。
     ${scoreBreakdownHTML(asin)}
     <p style="font-size:12.5px;color:var(--ink-2);margin-top:10px">AI 生成的文本部分已达标。但 <b>视觉 7/12</b> 和 <b>A+ 8/10</b> 还有分数空间——<b>这些 AI 无法自动完成</b>（需要设计师、摄影、内容团队做具体产出）。我列了一份人工跟进清单，你可以选择：<b>指派后再跑 A/B</b>（分数更高，起跑线更好），或者<b>先直接进项目/A/B</b>（快速验证再补）。</p>
@@ -3660,6 +3740,7 @@ document.addEventListener("click", e => {
   await renderKb();
   await loadProviderState();
   showRecHistItem();
+  renderCurrentOpt(); // 初始化侧边栏面板 · 空态
 })();
 
 /* =====================================================================
