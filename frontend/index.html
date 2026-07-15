@@ -1710,14 +1710,20 @@ let asinAnswers={}, asinFieldIdx=-1;
 
 /* 开新 Listing 时清空之前的知识库检索结果 · 避免旧品类污染新 ASIN */
 function resetKbFindResult(){ kbFindResult=null; customSources=[]; currentOptListing=null; renderCurrentOpt(); }
+/* 默认 Listing 优化 ASIN · Midea MVG30W8AST 30" Range Hood · 客户自家品牌 */
+const DEFAULT_LISTING_ASIN = 'B0CLGYLKXP';
+
 async function startListing(){
   resetKbFindResult();
   recChatActive=true;
   setRecStep(1);
   addMsg("user","帮我为一款 SKU 走一次 Listing 优化。");
-  await aiSay(`好的，只需要一个 <b>ASIN</b>——我会自动去 Amazon 商品页抓品类 / 型号 / 品牌 / 标题 / 价格 / 面包屑，再让 LLM 从原始信息里结构化推断，你只需要核对 + 补业务目标。`);
+  await aiSay(`默认从 <b>${DEFAULT_LISTING_ASIN}</b>（Midea 30" Range Hood）开始 · 我会去 Amazon 商品页抓画像 + 用 LLM 给原始 Listing 打个当前分做基线，然后跑 4 步优化流程。
+    <div class="qr-row">
+      <button class="qr primary" onclick="asinQuickInput('${DEFAULT_LISTING_ASIN}')">✓ 用默认 ASIN 开始</button>
+      <button class="qr" onclick="askAsinOnly()">换一个 ASIN</button>
+    </div>`, 300);
   asinAnswers={}; asinFieldIdx=0;
-  await askAsinOnly();
 }
 
 async function askAsinOnly(){
@@ -1766,7 +1772,8 @@ async function handleAsinInput(raw){
       stars: r.stars || null,
       reviews: r.reviews || null,
       prime: !!r.prime,
-      score: null, grade: null, dims: null, // Step 3 后填
+      baselineScore: null, baselineGrade: null, // 抓完立即评的当前 Listing 基线分
+      score: null, grade: null, dims: null, // Step 3 优化后分数
     };
     renderCurrentOpt();
     const llmTag = r.llmEnriched
@@ -1778,6 +1785,9 @@ async function handleAsinInput(raw){
         <b>🏷️ 品牌：</b>${esc(r.brand || '未识别')} · <b>💰 价格：</b>${esc(r.price || '未识别')}<br>
         <b>📁 面包屑：</b>${(r.breadcrumb||[]).map(esc).join(' › ') || '未识别'}
       </div>`, 400);
+
+    // 异步跑基线评分 · 不阻塞后续流程 · 分数出来后自动更新侧边栏
+    scoreBaselineListing(r).catch(e => console.warn('[Baseline score] failed', e.message));
   } catch (e) {
     b.parentElement.remove(); saveRecChat();
     await aiSay(`⚠ Amazon 抓取失败：${esc(e.message)}<br>
@@ -1835,6 +1845,32 @@ async function showAsinCard(){
 /* 生命周期：resetKbFindResult 清空 · handleAsinInput 填充 amazon 抓取字段 · runScoring 完成后写入分数 */
 let currentOptListing = null;
 
+/* 用 LLM 对原始 Amazon Listing 做基线评分 · 得到"当前评分"作为优化前基线
+   输入：asin-lookup 返回的 raw 字段 · 输出：写入 currentOptListing.baselineScore */
+async function scoreBaselineListing(rawLookup){
+  if (!backendConnected || !ACTIVE_MODEL) return; // 未联通模型 → 保持基线为 null
+  if (!currentOptListing || currentOptListing.asin !== rawLookup.asin) return;
+  // 从原始抓取字段构造一个用于打分的 Listing 对象
+  const listing = {
+    itemName: (rawLookup.title || '').slice(0, 75),
+    highlights: (rawLookup.featureBullets || []).slice(0, 2).join(' · ').slice(0, 125),
+    bullets: (rawLookup.featureBullets || []).slice(0, 5),
+    qa: [],
+    backendKeywords: '',
+    aplusOutline: '(原始 Listing 未提取 A+)',
+  };
+  try {
+    const r = await api.scoreListing(listing);
+    if (!r.ok || !currentOptListing || currentOptListing.asin !== rawLookup.asin) return;
+    currentOptListing.baselineScore = r.total;
+    currentOptListing.baselineGrade = r.grade || null;
+    renderCurrentOpt();
+    console.log(`[Baseline] ${rawLookup.asin} score=${r.total} grade=${r.grade}`);
+  } catch (e) {
+    console.warn('[Baseline score] failed:', e.message);
+  }
+}
+
 function renderCurrentOpt(){
   const el = $("currentOptBody");
   if (!el) return;
@@ -1849,14 +1885,44 @@ function renderCurrentOpt(){
   }
   const stars = c.stars || 0;
   const starHtml = stars ? '★'.repeat(Math.floor(stars)) + (stars-Math.floor(stars)>=0.5?'½':'') : '';
-  const scoreBlock = c.score != null
-    ? `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 10px;background:var(--q-purple-wash);border-radius:7px;border-left:3px solid var(--q-purple)">
-         <div style="flex:1;min-width:0">
-           <div style="font-size:10.5px;color:var(--ink-3);letter-spacing:.03em">AI-Ready Score</div>
-           <div><b style="font-size:20px;color:var(--q-purple-dark)">${c.score}</b><span style="font-size:11px;color:var(--ink-3)">/100</span> ${c.grade?`<span class="status-pill-sm ${c.grade==='A'?'sp-live':c.grade==='B'?'sp-ab':'sp-fail'}" style="font-size:10px;margin-left:4px">Grade ${esc(c.grade)}</span>`:''}</div>
-         </div>
-       </div>`
-    : `<div style="margin-top:8px;padding:8px 10px;background:#fafafa;border-radius:7px;font-size:11px;color:var(--ink-3);text-align:center">AI 评分待生成 · Step 3 完成后自动显示</div>`;
+  const gradePillCls = (g) => g==='A' ? 'sp-live' : g==='B' ? 'sp-ab' : 'sp-fail';
+
+  // 分数块 · 4 种状态：无 · 只有 baseline · 只有 optimized · 两者都有
+  let scoreBlock;
+  const hasBaseline = c.baselineScore != null;
+  const hasOptimized = c.score != null;
+  if (hasBaseline && hasOptimized) {
+    const delta = c.score - c.baselineScore;
+    scoreBlock = `<div style="margin-top:8px;padding:8px 10px;background:var(--q-purple-wash);border-radius:7px;border-left:3px solid var(--q-purple)">
+        <div style="font-size:10.5px;color:var(--ink-3);letter-spacing:.03em;margin-bottom:4px">AI-Ready Score · 当前 → 优化后</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:15px;color:var(--ink-3);text-decoration:line-through">${c.baselineScore}</span>
+          <span style="color:var(--ink-3)">→</span>
+          <b style="font-size:22px;color:var(--q-purple-dark)">${c.score}</b>
+          <span style="font-size:10.5px;color:var(--ink-3)">/100</span>
+          ${c.grade?`<span class="status-pill-sm ${gradePillCls(c.grade)}" style="font-size:10px">${esc(c.grade)}</span>`:''}
+          <span style="font-size:10.5px;font-weight:600;color:${delta>=0?'var(--a-fg)':'var(--risk)'};margin-left:auto">${delta>=0?'+':''}${delta}</span>
+        </div>
+      </div>`;
+  } else if (hasBaseline) {
+    scoreBlock = `<div style="margin-top:8px;padding:8px 10px;background:#fafafa;border-radius:7px;border-left:3px solid var(--ink-3)">
+        <div style="font-size:10.5px;color:var(--ink-3);letter-spacing:.03em">当前评分 · 优化前基线</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+          <b style="font-size:20px;color:var(--ink-2)">${c.baselineScore}</b><span style="font-size:11px;color:var(--ink-3)">/100</span>
+          ${c.baselineGrade?`<span class="status-pill-sm ${gradePillCls(c.baselineGrade)}" style="font-size:10px">${esc(c.baselineGrade)}</span>`:''}
+          <span style="font-size:10.5px;color:var(--ink-3);margin-left:auto">优化后目标 ≥80</span>
+        </div>
+      </div>`;
+  } else if (hasOptimized) {
+    scoreBlock = `<div style="margin-top:8px;padding:8px 10px;background:var(--q-purple-wash);border-radius:7px;border-left:3px solid var(--q-purple)">
+        <div style="font-size:10.5px;color:var(--ink-3);letter-spacing:.03em">优化后 AI-Ready Score</div>
+        <div><b style="font-size:20px;color:var(--q-purple-dark)">${c.score}</b><span style="font-size:11px;color:var(--ink-3)">/100</span> ${c.grade?`<span class="status-pill-sm ${gradePillCls(c.grade)}" style="font-size:10px;margin-left:4px">${esc(c.grade)}</span>`:''}</div>
+      </div>`;
+  } else {
+    scoreBlock = `<div style="margin-top:8px;padding:8px 10px;background:#fafafa;border-radius:7px;font-size:11px;color:var(--ink-3);text-align:center">
+        <span class="spinner" style="width:10px;height:10px;border-width:2px"></span> LLM 评基线分中…
+      </div>`;
+  }
   el.innerHTML = `
     <div style="border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff">
       ${c.imageUrl
